@@ -1,4 +1,3 @@
-# auth.py
 import hashlib
 import db
 import os

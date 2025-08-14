@@ -1,4 +1,3 @@
-# login.py
 import customtkinter as ctk
 from auth import login_user, register_user
 
@@ -27,7 +26,7 @@ def show_startup(app):
         password = password_entry.get()
         success, msg = login_user(username, password)
         if success:
-            from dashboard import open_dashboard
+            from dashboard import open_dashboard  # import here to avoid circular import
             if keep_logged_in.get():
                 from auth import save_login_state
                 save_login_state(username)

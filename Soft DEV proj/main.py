@@ -1,28 +1,25 @@
 import customtkinter as ctk
 import db
-import auth
-from login import show_startup
+from auth import load_login_state
 from dashboard import open_dashboard
-
-# Set customtkinter appearance and theme
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
+from login import show_startup
 
 def main():
-    # Create users table in DB if not exists
+    # Initialize DB tables
     db.create_user_table()
+    db.create_task_table()
 
-    # Setup main window
+    # Create main app window
     app = ctk.CTk()
     app.title("Work Tracker")
-    app.geometry(f"{app.winfo_screenwidth()}x{app.winfo_screenheight()}+0+0")
+    app.geometry("1000x600")
+    ctk.set_appearance_mode("Dark")
+    ctk.set_default_color_theme("blue")
 
-    # Load saved login state (if any)
-    saved_user = auth.load_login_state()
-
-    # Route to dashboard or login page
+    # Auto-login if saved state exists
+    saved_user = load_login_state()
     if saved_user:
-        open_dashboard(saved_user, app)
+        open_dashboard(saved_user, app)  # Pass existing app window
     else:
         show_startup(app)
 
