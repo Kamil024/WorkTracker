@@ -163,7 +163,93 @@ def show_startup(app):
         command=try_register
     ).pack(pady=(0, 18))
 
-    # Footer
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+    # ----------- TEST BUTTON (ADDED BUTTON) -----------
+    def open_test():
+        # Define the path to the test.py file
+        test_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.py')  # Ensure test.py is in the same folder
+        
+        if os.path.exists(test_file_path):  # Check if test.py exists in the path
+            os.system(f'python {test_file_path}')  # Run test.py using python
+        else:
+            messagebox.showerror("File Not Found", "The test.py file was not found.")  # Show an error if the file is missing
+
+    # Add a new "Test" button
+    ctk.CTkButton(
+        outer,
+        text="Test",  # Button label
+        height=48,
+        width=340,
+        fg_color="#8e44ad",  # Button color
+        hover_color="#9b59b6",  # Hover color
+        font=("Arial", 15, "bold"),
+        command=open_test  # Link the button to the function
+    ).pack(pady=(0, 18))  # Add padding between this and other elements
+    # ----------- END OF TEST BUTTON -----------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # Footer (Fixed Indentation)
     footer = ctk.CTkLabel(
         outer,
         text="© 2025 Work Tracker",

@@ -12,12 +12,12 @@ def open_dashboard(username, app):
 
     # Define colors based on theme
     if theme == "dark":
-        bg_color = "#2c3e50"
-        panel_color = "#34495e"
-        text_color = "white"
+        bg_color = "#181a20"  # Dark background for the entire app
+        panel_color = "#2c3e50"  # Dark panel background
+        text_color = "white"  # White text for dark mode
         label_text_color = "white"
-        entry_bg_color = "#2c3e50"
-        entry_fg_color = "white"
+        entry_bg_color = "#2c3e50"  # Dark background for entry fields
+        entry_fg_color = "white"  # White text for entry fields
         button_fg_color = "#2980b9"
         button_hover_color = "#3498db"
         danger_fg_color = "#c0392b"

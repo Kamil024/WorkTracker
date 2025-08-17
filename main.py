@@ -19,7 +19,7 @@ def main():
     # Auto-login if saved state exists
     saved_user = load_login_state()
     if saved_user:
-        open_dashboard(saved_user, app)
+        open_dashboard(saved_user, app)  # Pass existing app window
     else:
         show_startup(app)
 
