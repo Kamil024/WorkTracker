@@ -5,153 +5,132 @@ import db
 from auth import logout
 from datetime import datetime
 
-_history_win = None  # single instance for history window
-
 def open_dashboard(username, app):
-    global _history_win
-
-    # Clear previous widgets
     for w in app.winfo_children():
         w.destroy()
+
+    app.configure(fg_color="#ecf0f1")
     app.title(f"{username}'s Dashboard")
     app.geometry("1200x700")
 
-    # ===== LEFT FRAME: Create Task =====
-    left = ctk.CTkFrame(app, width=360)
+    # Add this attribute to track the history window
+    if not hasattr(app, "history_window"):
+        app.history_window = None
+
+    # LEFT PANEL
+    left = ctk.CTkFrame(app, width=350, fg_color="white", corner_radius=12)
     left.pack(side="left", fill="y", padx=16, pady=16)
 
-    ctk.CTkLabel(left, text=f"Welcome, {username}!", font=("Arial", 18, "bold")).pack(pady=(0,12))
+    ctk.CTkLabel(
+        left, text=f"👋 Welcome, {username}!", font=("Arial", 18, "bold"), text_color="#2c3e50"
+    ).pack(pady=(20, 16))
 
-    title_entry = ctk.CTkEntry(left, placeholder_text="Task title / description")
-    title_entry.pack(fill="x", padx=8, pady=(0,10))
+    title_entry = ctk.CTkEntry(left, placeholder_text="Task title / description", height=35)
+    title_entry.pack(fill="x", padx=12, pady=(0, 12))
 
-    ctk.CTkLabel(left, text="Start Date:").pack(anchor="w", padx=8)
+    ctk.CTkLabel(left, text="Start Date:", text_color="#7f8c8d").pack(anchor="w", padx=12)
     start_entry = DateEntry(left, date_pattern="yyyy-mm-dd")
-    start_entry.pack(fill="x", padx=8, pady=(0,10))
+    start_entry.pack(fill="x", padx=12, pady=(0, 10))
 
-    ctk.CTkLabel(left, text="Due Date:").pack(anchor="w", padx=8)
+    ctk.CTkLabel(left, text="Due Date:", text_color="#7f8c8d").pack(anchor="w", padx=12)
     due_entry = DateEntry(left, date_pattern="yyyy-mm-dd")
-    due_entry.pack(fill="x", padx=8, pady=(0,14))
-
-    def add_task():
-        title = title_entry.get().strip()
-        start_date = start_entry.get()
-        due_date = due_entry.get()
-        if not title:
-            messagebox.showwarning("Missing title", "Please enter a task title.")
-            return
-        db.add_task(username, title, start_date, due_date)
-        title_entry.delete(0,"end")
-        load_tasks()
-
-    ctk.CTkButton(left, text="Add Task", command=add_task).pack(fill="x", padx=8, pady=(0,10))
-
-    # Logout button
-    def do_logout():
-        logout()
-        from login import show_startup  # import here to avoid circular import
-        show_startup(app)
-
-    ctk.CTkButton(left, text="Logout", command=do_logout).pack(fill="x", padx=8, pady=(20,0))
-
-    # History button
-    def open_history():
-        global _history_win
-        if _history_win is not None and _history_win.winfo_exists():
-            _history_win.lift()
-            return
-
-        _history_win = ctk.CTkToplevel(app)
-        _history_win.title("Task History")
-        _history_win.geometry("700x500")
-
-        def on_close():
-            global _history_win
-            _history_win.destroy()
-            _history_win = None
-
-        _history_win.protocol("WM_DELETE_WINDOW", on_close)
-
-        hist_frame = ctk.CTkScrollableFrame(_history_win)
-        hist_frame.pack(fill="both", expand=True, padx=12, pady=12)
-
-        completed = db.get_completed_tasks(username)
-        if not completed:
-            ctk.CTkLabel(hist_frame, text="No completed tasks yet.").pack(pady=8)
-        else:
-            for row in completed:
-                task_id, title, start, due, _ = row
-                ctk.CTkLabel(
-                    hist_frame,
-                    text=f"✅ {title}\nStart: {start}   Due: {due}",
-                    anchor="w",
-                    justify="left",
-                    wraplength=650
-                ).pack(fill="x", padx=6, pady=4)
-
-    ctk.CTkButton(left, text="Show History", command=open_history).pack(fill="x", padx=8, pady=(10,0))
-
-    # ===== RIGHT FRAME: Active Tasks =====
-    right = ctk.CTkFrame(app)
-    right.pack(side="right", fill="both", expand=True, padx=16, pady=16)
-
-    ctk.CTkLabel(right, text="Active Tasks", font=("Arial", 18, "bold")).pack(anchor="w", pady=(0,8), padx=8)
-
-    tasks_frame = ctk.CTkScrollableFrame(right)
-    tasks_frame.pack(fill="both", expand=True, padx=8, pady=8)
-
-    task_labels = []
-
-    def compute_wrap():
-        avail = max(tasks_frame.winfo_width(), 400)
-        return max(300, avail - 240)
-
-    def delete_task(task_id):
-        db.delete_task(task_id)
-        load_tasks()
-
-    def mark_done(task_id):
-        db.update_task_completion(task_id, 1)
-        load_tasks()
+    due_entry.pack(fill="x", padx=12, pady=(0, 16))
 
     def load_tasks():
-        nonlocal task_labels
-        task_labels = []
-
         for w in tasks_frame.winfo_children():
             w.destroy()
 
-        rows = db.get_tasks(username)
         today = datetime.today().date()
-
-        for row in rows:
-            task_id, title, start, due, _ = row
+        for task_id, title, start, due, completed in db.get_tasks(username):
             due_dt = datetime.strptime(due, "%Y-%m-%d").date()
-
-            task_row = ctk.CTkFrame(tasks_frame, fg_color="transparent")
-            task_row.pack(fill="x", padx=6, pady=4)
-
-            # Color-code overdue/urgent tasks
             if due_dt < today:
-                text_color = "red"
+                color = "red"
             elif due_dt == today:
-                text_color = "orange"
+                color = "orange"
             else:
-                text_color = None  # default
+                color = "#2c3e50"
 
-            # Title left
-            left_lbl = ctk.CTkLabel(task_row, text=title, anchor="w", text_color=text_color)
-            left_lbl.pack(side="left", fill="x", expand=True, padx=5)
+            row = ctk.CTkFrame(tasks_frame, fg_color="white")
+            row.pack(fill="x", padx=6, pady=4)
 
-            # Due right
-            right_lbl = ctk.CTkLabel(task_row, text=f"Due: {due}", anchor="e", text_color=text_color)
-            right_lbl.pack(side="right", padx=5)
+            ctk.CTkLabel(row, text=title, text_color=color, anchor="w").pack(side="left", fill="x", expand=True, padx=6)
+            ctk.CTkLabel(row, text=f"Due: {due}", text_color=color).pack(side="left", padx=6)
 
-            # Buttons
-            ctk.CTkButton(task_row, text="Done", width=80, fg_color="green", command=lambda tid=task_id: mark_done(tid)).pack(side="right", padx=4)
-            ctk.CTkButton(task_row, text="Delete", width=80, fg_color="red", command=lambda tid=task_id: delete_task(tid)).pack(side="right", padx=4)
+            ctk.CTkButton(
+                row, text="Done", width=60, fg_color="#27ae60", hover_color="#2ecc71",
+                command=lambda tid=task_id: (db.update_task_completion(tid, 1), load_tasks())
+            ).pack(side="right", padx=4)
+            ctk.CTkButton(
+                row, text="Delete", width=60, fg_color="#c0392b", hover_color="#e74c3c",
+                command=lambda tid=task_id: (db.delete_task(tid), load_tasks())
+            ).pack(side="right", padx=4)
 
-            task_labels.append(left_lbl)
+    def add_task():
+        title = title_entry.get().strip()
+        if not title:
+            messagebox.showwarning("Missing title", "Please enter a task title.")
+            return
+        db.add_task(username, title, start_entry.get(), due_entry.get())
+        title_entry.delete(0, "end")
+        load_tasks()
 
-    app.bind("<Configure>", lambda e: [lbl.configure(wraplength=max(tasks_frame.winfo_width()-240,300)) for lbl in task_labels])
+    def open_history(user):
+        # Prevent multiple history windows
+        if app.history_window is not None and app.history_window.winfo_exists():
+            app.history_window.lift()
+            return
+
+        hist = ctk.CTkToplevel(app)
+        app.history_window = hist
+        hist.title("Task History")
+        hist.geometry("700x500")
+        hist.configure(fg_color="white")
+
+        hist_frame = ctk.CTkScrollableFrame(hist)
+        hist_frame.pack(fill="both", expand=True, padx=12, pady=12)
+
+        completed = db.get_completed_tasks(user)
+        if not completed:
+            ctk.CTkLabel(hist_frame, text="No completed tasks yet.").pack(pady=8)
+        else:
+            for _, title, start, due, _ in completed:
+                ctk.CTkLabel(hist_frame, text=f"✅ {title}\nStart: {start}   Due: {due}",
+                             anchor="w", justify="left").pack(fill="x", padx=6, pady=4)
+
+        def on_close():
+            app.history_window = None
+            hist.destroy()
+        hist.protocol("WM_DELETE_WINDOW", on_close)
+
+    ctk.CTkButton(
+        left, text="➕ Add Task", fg_color="#2980b9", hover_color="#3498db",
+        height=35, command=add_task
+    ).pack(fill="x", padx=12, pady=(0, 12))
+
+    ctk.CTkButton(
+        left, text="📜 History", fg_color="#8e44ad", hover_color="#9b59b6",
+        height=35, command=lambda: open_history(username)
+    ).pack(fill="x", padx=12, pady=(0, 10))
+
+    def from_login():
+        from login import show_startup
+        show_startup(app)
+
+    ctk.CTkButton(
+        left, text="🚪 Logout", fg_color="#c0392b", hover_color="#e74c3c",
+        height=35, command=lambda: (logout(), from_login())
+    ).pack(fill="x", padx=12, pady=(10, 0))
+
+    # RIGHT PANEL
+    right = ctk.CTkFrame(app, fg_color="white", corner_radius=12)
+    right.pack(side="right", fill="both", expand=True, padx=16, pady=16)
+
+    ctk.CTkLabel(
+        right, text="📅 Active Tasks", font=("Arial", 18, "bold"), text_color="#2c3e50"
+    ).pack(anchor="w", pady=(16, 8), padx=12)
+
+    tasks_frame = ctk.CTkScrollableFrame(right)
+    tasks_frame.pack(fill="both", expand=True, padx=12, pady=12)
+
+    # Initial load
     load_tasks()
