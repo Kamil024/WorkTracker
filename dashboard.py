@@ -1,242 +1,191 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from tkcalendar import DateEntry
-import tkinter as tk
 import db
 from auth import logout
 from datetime import datetime
 from settings import load_theme_preference
 
-def open_dashboard(username, app):
-    theme = load_theme_preference()  # Load saved theme ("light" or "dark")
 
-    # Define colors based on theme
+def open_dashboard(username, app):
+    theme = load_theme_preference()
+
+    # Colors
     if theme == "dark":
-        bg_color = "#2c3e50"
-        panel_color = "#34495e"
+        bg_color = "#23272e"
+        sidebar_color = "#1a1d22"
+        panel_color = "#23272e"
         text_color = "white"
-        label_text_color = "white"
-        entry_bg_color = "#2c3e50"
+        entry_bg_color = "#23272e"
         entry_fg_color = "white"
         button_fg_color = "#2980b9"
         button_hover_color = "#3498db"
         danger_fg_color = "#c0392b"
         danger_hover_color = "#e74c3c"
-        done_fg_color = "#27ae60"
-        done_hover_color = "#2ecc71"
     else:
-        bg_color = "#ecf0f1"
+        bg_color = "#f7f7f7"
+        sidebar_color = "#ededed"
         panel_color = "white"
-        text_color = "#2c3e50"
-        label_text_color = "#2c3e50"
+        text_color = "#23272e"
         entry_bg_color = "white"
-        entry_fg_color = "black"
+        entry_fg_color = "#23272e"
         button_fg_color = "#2980b9"
         button_hover_color = "#3498db"
         danger_fg_color = "#c0392b"
         danger_hover_color = "#e74c3c"
-        done_fg_color = "#27ae60"
-        done_hover_color = "#2ecc71"
 
     for w in app.winfo_children():
         w.destroy()
-
     app.configure(fg_color=bg_color)
     app.title(f"{username}'s Dashboard")
     app.geometry("1200x700")
 
-    # Add this attribute to track the history window
-    if not hasattr(app, "history_window"):
-        app.history_window = None
+    # SIDEBAR
+    sidebar = ctk.CTkFrame(app, width=220, fg_color=sidebar_color, corner_radius=0)
+    sidebar.pack(side="left", fill="y")
 
-    # LEFT PANEL
-    left = ctk.CTkFrame(app, width=350, fg_color=panel_color, corner_radius=12)
-    left.pack(side="left", fill="y", padx=16, pady=16)
+    ctk.CTkLabel(sidebar, text="Deadline", font=("Arial", 22, "bold"), text_color=button_fg_color).pack(pady=(30, 20))
 
-    ctk.CTkLabel(
-        left, text=f"👋 Welcome, {username}!", font=("Arial", 18, "bold"), text_color=label_text_color
-    ).pack(pady=(20, 16))
+    # MAIN PANEL container
+    main = ctk.CTkFrame(app, fg_color=panel_color, corner_radius=12)
+    main.pack(side="top", fill="both", expand=True, padx=40, pady=(30, 30))
 
-    title_entry = ctk.CTkEntry(
-        left,
-        placeholder_text="Task title / description",
-        height=35,
-        fg_color=entry_bg_color,
-        text_color=entry_fg_color,
-    )
-    title_entry.pack(fill="x", padx=12, pady=(0, 12))
-
-    ctk.CTkLabel(left, text="Start Date:", text_color=label_text_color).pack(anchor="w", padx=12)
-    start_entry = DateEntry(left, date_pattern="yyyy-mm-dd")
-    start_entry.pack(fill="x", padx=12, pady=(0, 10))
-
-    ctk.CTkLabel(left, text="Due Date:", text_color=label_text_color).pack(anchor="w", padx=12)
-    due_entry = DateEntry(left, date_pattern="yyyy-mm-dd")
-    due_entry.pack(fill="x", padx=12, pady=(0, 16))
-
-    def load_tasks():
-        for w in tasks_frame.winfo_children():
+    def clear_main():
+        for w in main.winfo_children():
             w.destroy()
 
-        today = datetime.today().date()
-        for task_id, title, start, due, completed in db.get_tasks(username):
-            try:
-                due_dt = datetime.strptime(due, "%Y-%m-%d").date()
-            except Exception:
-                due_dt = today
+    # -------------------- Pages --------------------
 
-            if due_dt < today:
-                color = "red"
-            elif due_dt == today:
-                color = "orange"
+    def show_overview():
+        clear_main()
+        ctk.CTkLabel(main, text="📊 Overview", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=20)
+        pending = db.get_tasks(username)
+        done = db.get_completed_tasks(username)
+        ctk.CTkLabel(main, text=f"Pending tasks: {len(pending)}", text_color=text_color).pack(pady=5)
+        ctk.CTkLabel(main, text=f"Completed tasks: {len(done)}", text_color=text_color).pack(pady=5)
+
+    def show_add_deadline():
+        clear_main()
+
+        # --- Tab buttons row ---
+        tabs = ctk.CTkFrame(main, fg_color=panel_color)
+        tabs.pack(fill="x", pady=5)
+        for name in ["Edit Deadline", "Privacy Settings", "Alerts", "Set Reminder"]:
+            ctk.CTkButton(tabs, text=name, fg_color="transparent",
+                          text_color=text_color, hover_color="#ddd",
+                          width=140).pack(side="left", padx=5)
+
+        # --- Card form ---
+        form = ctk.CTkFrame(main, fg_color=panel_color, border_width=1, corner_radius=10)
+        form.pack(fill="both", expand=True, padx=30, pady=20)
+
+        # Grid form layout
+        fields = [
+            ("Task Name", "Project Launch", 0, 0),
+            ("Due Date", datetime.today().strftime("%Y-%m-%d"), 0, 1),
+            ("Description", "Launch the new project.", 1, 0),
+            ("Priority", "High", 2, 0),
+            ("Notify Me", "1 day before", 2, 1),
+            ("Category", "Work", 3, 0),
+            ("Location", "Office", 3, 1),
+            ("Status", "Pending", 4, 0),
+            ("Notes", "Additional details here.", 4, 1),
+        ]
+
+        entries = {}
+        for label, placeholder, r, c in fields:
+            frame = ctk.CTkFrame(form, fg_color=panel_color)
+            frame.grid(row=r, column=c, padx=20, pady=10, sticky="ew")
+            ctk.CTkLabel(frame, text=label, text_color=text_color, anchor="w").pack(anchor="w")
+            if label == "Due Date":
+                entry = DateEntry(frame, date_pattern="yyyy-mm-dd")
+                entry.pack(fill="x")
             else:
-                color = text_color
+                entry = ctk.CTkEntry(frame, placeholder_text=placeholder, fg_color=entry_bg_color, text_color=entry_fg_color)
+                entry.pack(fill="x")
+            entries[label] = entry
 
-            row = ctk.CTkFrame(tasks_frame, fg_color=panel_color)
-            row.pack(fill="x", padx=6, pady=4)
-
-            ctk.CTkLabel(row, text=title, text_color=color, anchor="w").pack(
-                side="left", fill="x", expand=True, padx=6
-            )
-            ctk.CTkLabel(row, text=f"Due: {due}", text_color=color).pack(side="left", padx=6)
-
-            ctk.CTkButton(
-                row,
-                text="Done",
-                width=60,
-                fg_color=done_fg_color,
-                hover_color=done_hover_color,
-                command=lambda tid=task_id: (db.update_task_completion(tid, 1), load_tasks()),
-            ).pack(side="right", padx=4)
-            ctk.CTkButton(
-                row,
-                text="Delete",
-                width=60,
-                fg_color=danger_fg_color,
-                hover_color=danger_hover_color,
-                command=lambda tid=task_id: (db.delete_task(tid), load_tasks()),
-            ).pack(side="right", padx=4)
-
-    def add_task():
-        title = title_entry.get().strip()
-        if not title:
-            messagebox.showwarning("Missing title", "Please enter a task title.")
-            return
-        db.add_task(username, title, start_entry.get(), due_entry.get())
-        title_entry.delete(0, "end")
-        load_tasks()
-
-    def open_history(user):
-        # Prevent multiple history windows
-        if app.history_window is not None and app.history_window.winfo_exists():
-            app.history_window.lift()
-            return
-
-        hist = ctk.CTkToplevel(app)
-        app.history_window = hist
-        hist.title("Task History")
-        hist.geometry("700x500")
-        hist.configure(fg_color=panel_color)
-
-        # Container for tasks
-        container = ctk.CTkScrollableFrame(hist, fg_color=panel_color)
-        container.pack(fill="both", expand=True, padx=12, pady=12)
-
-        # Store task checkboxes
-        task_vars = {}
-        checkboxes = []
-
-        # Load completed tasks
-        completed = db.get_completed_tasks(user)
-        if not completed:
-            tk.Label(container, text="No completed tasks yet.", fg="gray").pack(pady=8)
-        else:
-            for tid, title, start, due, _ in completed:
-                var = tk.BooleanVar(value=False)
-                cb = tk.Checkbutton(
-                    container,
-                    text=f"{title} | Start: {start} | Due: {due}",
-                    variable=var,
-                    onvalue=True,
-                    offvalue=False,
-                    anchor="w",
-                    bg=panel_color,
-                    fg=label_text_color,
-                    selectcolor=panel_color,
-                    activebackground=panel_color,
-                    activeforeground=label_text_color,
-                )
-                cb.pack(fill="x", anchor="w", pady=2)
-                task_vars[tid] = var
-                checkboxes.append(cb)
-
-        def delete_selected():
-            to_delete = [tid for tid, var in task_vars.items() if var.get()]
-            if not to_delete:
-                messagebox.showwarning("No selection", "Please select at least one task to delete.")
+        def add_deadline():
+            t = entries["Task Name"].get().strip()
+            d = entries["Due Date"].get()
+            if not t:
+                messagebox.showwarning("Missing Task Name", "Please enter a task name.")
                 return
-            for tid in to_delete:
-                db.delete_task(tid)
-            hist.destroy()
-            open_history(user)  # refresh after delete
+            db.add_task(username, t, datetime.today().strftime("%Y-%m-%d"), d)
+            messagebox.showinfo("Added", "Deadline added!")
+            show_mytasks()
 
-        delete_btn = ctk.CTkButton(
-            hist,
-            text="🗑 Delete Selected Task(s)",
-            fg_color=danger_fg_color,
-            hover_color=danger_hover_color,
-            command=delete_selected,
-        )
-        delete_btn.pack(pady=8)
+        ctk.CTkButton(form, text="Add Deadline", fg_color="black",
+                      hover_color="#333", text_color="white", height=40,
+                      command=add_deadline).grid(row=6, column=0, columnspan=2, pady=20, padx=30, sticky="ew")
 
-        def on_close():
-            app.history_window = None
-            hist.destroy()
+    def show_upcoming():
+        clear_main()
+        ctk.CTkLabel(main, text="⏰ Upcoming Deadlines", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=20)
+        tasks = db.get_tasks(username)
+        if not tasks:
+            ctk.CTkLabel(main, text="No upcoming deadlines.", text_color="#888").pack()
+            return
+        for t in tasks:
+            ctk.CTkLabel(main, text=f"{t[1]} — Due {t[3]}", text_color=text_color).pack(anchor="w", padx=20, pady=2)
 
-        hist.protocol("WM_DELETE_WINDOW", on_close)
+    def show_mytasks():
+        clear_main()
+        ctk.CTkLabel(main, text="📝 My Tasks", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=10)
 
-    ctk.CTkButton(
-        left,
-        text="➕ Add Task",
-        fg_color=button_fg_color,
-        hover_color=button_hover_color,
-        height=35,
-        command=add_task,
-    ).pack(fill="x", padx=12, pady=(0, 12))
+        tasks = db.get_tasks(username)
+        if not tasks:
+            ctk.CTkLabel(main, text="No active tasks.", text_color="#888").pack(pady=20)
+            return
 
-    ctk.CTkButton(
-        left,
-        text="📜 History",
-        fg_color="#8e44ad",
-        hover_color="#9b59b6",
-        height=35,
-        command=lambda: open_history(username),
-    ).pack(fill="x", padx=12, pady=(0, 10))
+        for t in tasks:
+            card = ctk.CTkFrame(main, fg_color=panel_color, border_width=1, corner_radius=10)
+            card.pack(fill="x", padx=30, pady=10)
 
+            ctk.CTkLabel(card, text=f"{t[1]} (Due: {t[3]})", anchor="w", text_color=text_color,
+                         font=("Arial", 15, "bold")).pack(side="left", padx=10, pady=10)
+
+            # Buttons
+            ctk.CTkButton(card, text="✅ Done", width=70,
+                          command=lambda tid=t[0]: (db.update_task_completion(tid, 1), show_mytasks())
+                          ).pack(side="right", padx=5, pady=10)
+            ctk.CTkButton(card, text="❌ Delete", fg_color=danger_fg_color,
+                          hover_color=danger_hover_color, width=70,
+                          command=lambda tid=t[0]: (db.delete_task(tid), show_mytasks())
+                          ).pack(side="right", padx=5, pady=10)
+
+    def show_reports():
+        clear_main()
+        ctk.CTkLabel(main, text="📈 Progress Reports", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=20)
+        total = len(db.get_tasks(username)) + len(db.get_completed_tasks(username))
+        done = len(db.get_completed_tasks(username))
+        percent = (done / total * 100) if total else 0
+        ctk.CTkLabel(main, text=f"Completed {done}/{total} tasks ({percent:.1f}%)", text_color=text_color).pack(pady=10)
+
+    # -------------------- Sidebar Buttons --------------------
+    nav_items = [
+        ("📊 Overview", show_overview),
+        ("➕ Add Deadline", show_add_deadline),
+        ("⏰ Upcoming Deadlines", show_upcoming),
+        ("📝 My Tasks", show_mytasks),
+        ("📈 Progress Reports", show_reports),
+    ]
+    for text, cmd in nav_items:
+        ctk.CTkButton(sidebar, text=text, anchor="w", fg_color="transparent",
+                      hover_color="#d0d0d0", text_color=text_color,
+                      font=("Arial", 15), command=cmd).pack(fill="x", padx=16, pady=2)
+
+    # Footer
+    ctk.CTkButton(sidebar, text="⚙️ Settings", anchor="w", fg_color="transparent",
+                  hover_color="#d0d0d0", text_color=text_color, font=("Arial", 15)).pack(fill="x", padx=16, pady=(40, 2))
+    ctk.CTkButton(sidebar, text="🚪 Log out", anchor="w", fg_color="transparent",
+                  hover_color="#ffeaea", text_color=danger_fg_color, font=("Arial", 15),
+                  command=lambda: (logout(), from_login())).pack(fill="x", padx=16, pady=2)
+
+    # Default page
+    show_overview()
+
+    # Logout helper
     def from_login():
         from login import show_startup
-
         show_startup(app)
-
-    ctk.CTkButton(
-        left,
-        text="🚪 Logout",
-        fg_color=danger_fg_color,
-        hover_color=danger_hover_color,
-        height=35,
-        command=lambda: (logout(), from_login()),
-    ).pack(fill="x", padx=12, pady=(10, 0))
-
-    # RIGHT PANEL
-    right = ctk.CTkFrame(app, fg_color=panel_color, corner_radius=12)
-    right.pack(side="right", fill="both", expand=True, padx=16, pady=16)
-
-    ctk.CTkLabel(
-        right, text="📅 Active Tasks", font=("Arial", 18, "bold"), text_color=label_text_color
-    ).pack(anchor="w", pady=(16, 8), padx=12)
-
-    tasks_frame = ctk.CTkScrollableFrame(right, fg_color=panel_color)
-    tasks_frame.pack(fill="both", expand=True, padx=12, pady=12)
-
-    # Initial load
-    load_tasks()
