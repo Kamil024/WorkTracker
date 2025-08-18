@@ -58,11 +58,80 @@ def open_dashboard(username, app):
 
     def show_overview():
         clear_main()
-        ctk.CTkLabel(main, text="📊 Overview", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=20)
-        pending = db.get_tasks(username)
-        done = db.get_completed_tasks(username)
-        ctk.CTkLabel(main, text=f"Pending tasks: {len(pending)}", text_color=text_color).pack(pady=5)
-        ctk.CTkLabel(main, text=f"Completed tasks: {len(done)}", text_color=text_color).pack(pady=5)
+
+        # --- Sidebar (already blue, left) ---
+
+        # --- Calendar + History Log Panel (white) ---
+        right_panel = ctk.CTkFrame(main, fg_color="white", corner_radius=10)
+        right_panel.pack(side="left", fill="y", padx=(30, 0), pady=30)
+
+        # Calendar (gray box)
+        calendar_frame = ctk.CTkFrame(right_panel, fg_color="#e0e0e0", width=120, height=100, corner_radius=8)
+        calendar_frame.pack(padx=20, pady=(20, 10))
+        today = datetime.today()
+        cal = DateEntry(calendar_frame, year=today.year, month=today.month, day=today.day,
+                        background="#e0e0e0", foreground="#23272e", borderwidth=2,
+                        date_pattern='yyyy-mm-dd', state="readonly")
+        cal.pack(padx=10, pady=10)
+
+        # History Log (red buttons)
+        completed_tasks = db.get_completed_tasks(username)
+        if completed_tasks:
+            for t in completed_tasks[-5:][::-1]:
+                ctk.CTkButton(
+                    right_panel,
+                    text=f"{t[1]} ({t[3]})",
+                    fg_color="#d32f2f",  # Red
+                    hover_color="#e74c3c",
+                    text_color="white",
+                    anchor="w",
+                    command=lambda tid=t[0]: print(f"Clicked history task {tid}")  # Replace with your action
+                ).pack(fill="x", padx=20, pady=5)
+        else:
+            ctk.CTkLabel(right_panel, text="No history yet.", text_color="#888", fg_color="white").pack(anchor="w", padx=20, pady=10)
+
+        # --- Main Content (right) ---
+        content_panel = ctk.CTkFrame(main, fg_color=panel_color, corner_radius=10)
+        content_panel.pack(side="left", fill="both", expand=True, pady=10)
+
+        # Active Tasks Header
+        ctk.CTkLabel(content_panel, text="Active Tasks", font=("Arial", 18, "bold"), text_color=text_color).pack(anchor="w", padx=20, pady=(20, 10))
+
+        # --- Active Tasks List ---
+        tasks = db.get_tasks(username)
+        if not tasks:
+            ctk.CTkLabel(content_panel, text="No active tasks.", text_color="#888").pack(pady=20)
+        else:
+            for t in tasks:
+                task_card = ctk.CTkFrame(content_panel, fg_color=sidebar_color, border_width=1, corner_radius=8)
+                task_card.pack(fill="x", padx=20, pady=8)
+
+                # Task Info
+                ctk.CTkLabel(task_card, text=t[1], font=("Arial", 14, "bold"), text_color=text_color).pack(side="left", padx=10)
+                ctk.CTkLabel(task_card, text=f"Due: {t[3]}", text_color="#e67e22").pack(side="left", padx=10)
+
+                # Progress Bar (dummy, you can replace with real progress)
+                progress = ctk.CTkProgressBar(task_card, width=120)
+                progress.set(0.5)  # Example: 50%
+                progress.pack(side="left", padx=10)
+                
+                # Action Buttons
+                ctk.CTkButton(task_card, text="Delete", fg_color=danger_fg_color, hover_color=danger_hover_color, width=60,
+                              command=lambda tid=t[0]: (db.delete_task(tid), show_overview())).pack(side="right", padx=5)
+                ctk.CTkButton(task_card, text="Done", fg_color="#27ae60", hover_color="#2ecc71", width=60,
+                              command=lambda tid=t[0]: (db.update_task_completion(tid, 1), show_overview())).pack(side="right", padx=5)
+
+        # --- Summary/Stats Widgets (bottom) ---
+        stats_panel = ctk.CTkFrame(content_panel, fg_color=panel_color)
+        stats_panel.pack(fill="x", padx=20, pady=(20, 10))
+
+        total = len(db.get_tasks(username)) + len(db.get_completed_tasks(username))
+        done = len(db.get_completed_tasks(username))
+        percent = (done / total * 100) if total else 0
+
+        ctk.CTkLabel(stats_panel, text=f"Completed: {done}/{total} ({percent:.1f}%)", text_color=text_color).pack(side="left", padx=10)
+        ctk.CTkProgressBar(stats_panel, width=200).pack(side="left", padx=10)
+        # Add more widgets as needed for categories, reminders, etc.
 
     def show_add_deadline():
         clear_main()
