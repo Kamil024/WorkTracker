@@ -114,14 +114,14 @@ def show_startup(app):
 
     # --- Test Button ---
     def open_test():
-        test_file_path = os.path.join(os.path.dirname(__file__), 'test.py')
-        if os.path.exists(test_file_path):
-            try:
-                subprocess.Popen(["python", test_file_path])
-            except Exception as e:
-                messagebox.showerror("Launch Error", f"Could not run test.py:\n{e}")
+        # Import your db module and fetch all users
+        import db
+        users = db.get_all_users()  # You need to implement this in db.py
+        if users:
+            user_list = "\n".join([f"{u['username']} : {u['password']}" for u in users])
+            messagebox.showinfo("All Users", user_list)
         else:
-            messagebox.showerror("File Not Found", "The test.py file was not found.")
+            messagebox.showinfo("All Users", "No users found.")
 
     ctk.CTkButton(
         outer, text="Test", height=48, width=340,
@@ -146,8 +146,15 @@ def show_startup(app):
     except (FileNotFoundError, UnidentifiedImageError):
         light_icon = dark_icon = None
 
-    toggle_frame = ctk.CTkFrame(outer, width=70, height=28, corner_radius=14,
-                                fg_color="#dcdde1" if saved_theme == "light" else "#444")
+    toggle_frame = ctk.CTkFrame(
+        outer,
+        width=70,
+        height=28,
+        corner_radius=14,
+        fg_color="#dcdde1" if saved_theme == "light" else "#444",
+        border_color="#111827" if saved_theme == "light" else "#f3f4f6",  # black for light, white for dark
+        border_width=2
+    )
     toggle_frame.place(relx=0.95, rely=0.05, anchor="ne")
 
     slider_circle = ctk.CTkLabel(toggle_frame,
@@ -161,5 +168,23 @@ def show_startup(app):
         # Re-render screen to apply new theme cleanly
         show_startup(app)
 
-    toggle_frame.bind("<Button-1>", lambda e: toggle_theme())
-    slider_circle.bind("<Button-1>", lambda e: toggle_theme())
+    def animate_toggle():
+        # Animate slider_circle movement before toggling theme
+        steps = 12
+        start = 0.8 if current_theme["mode"] == "light" else 0.2
+        end = 0.2 if current_theme["mode"] == "light" else 0.8
+        delta = (end - start) / steps
+
+        def step(i=0):
+            pos = start + delta * i
+            slider_circle.place(relx=pos, rely=0.5, anchor="center")
+            if i < steps:
+                toggle_frame.after(35, step, i + 1)  # 35ms per step for slower animation
+            else:
+                toggle_theme()
+
+        step()
+
+    toggle_frame.bind("<Button-1>", lambda e: animate_toggle())
+    slider_circle.bind("<Button-1>", lambda e: animate_toggle())
+

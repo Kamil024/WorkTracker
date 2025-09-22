@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
-from tkcalendar import DateEntry
+from tkcalendar import DateEntry, Calendar
 import db
 from auth import logout
 from datetime import datetime
@@ -15,6 +15,7 @@ def open_dashboard(username, app):
         bg_color = "#23272e"
         sidebar_color = "#1a1d22"
         panel_color = "#23272e"
+        bg_color_panel = "#181a1f"  # darker for panels
         text_color = "white"
         entry_bg_color = "#23272e"
         entry_fg_color = "white"
@@ -26,6 +27,7 @@ def open_dashboard(username, app):
         bg_color = "#f7f7f7"
         sidebar_color = "#ededed"
         panel_color = "white"
+        bg_color_panel = "#e0e0e0"  # gray for panels
         text_color = "#23272e"
         entry_bg_color = "white"
         entry_fg_color = "#23272e"
@@ -66,64 +68,32 @@ def open_dashboard(username, app):
         upcoming = pending  # Customize if you have separate logic
 
         # Panel 1: Pending Tasks
-        panel1 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=220, height=640)
+        panel1 = ctk.CTkFrame(main, fg_color=bg_color_panel, corner_radius=10, width=220, height=640)
         panel1.place(x=0, y=0)
         panel1.pack_propagate(False)
-        ctk.CTkLabel(panel1, text="Pending Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-        ctk.CTkLabel(panel1, text=str(pending), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
+
+        # Calendar UI (full month view)
+        calendar_label = ctk.CTkLabel(panel1, text="Calendar", font=("Arial", 13), text_color=text_color)
+        calendar_label.pack(pady=(30, 5))
+        calendar = Calendar(panel1, selectmode="day", year=datetime.now().year, month=datetime.now().month, day=datetime.now().day)
+        calendar.pack(pady=(0, 10))
 
         # Panel 2: Completed Tasks
-        panel2 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=670, height=200)
-        panel2.place(x=230,y=0)  # Adjust x so panels don't overlap
+        panel2 = ctk.CTkFrame(main, fg_color=bg_color_panel, corner_radius=10, width=670, height=200)
+        panel2.place(x=230,y=0)
         panel2.pack_propagate(False)
-        ctk.CTkLabel(panel2, text="Completed Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-        ctk.CTkLabel(panel2, text=str(completed), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
 
-        panel3 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=215, height=430)
-        panel3.place(x=230,y=210)  # Adjust x so panels don't overlap
+        panel3 = ctk.CTkFrame(main, fg_color=bg_color_panel, corner_radius=10, width=215, height=430)
+        panel3.place(x=230,y=210)
         panel3.pack_propagate(False)
-        ctk.CTkLabel(panel3, text="Completed Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-        ctk.CTkLabel(panel3, text=str(completed), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
 
-        panel4 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=215, height=430)
-        panel4.place(x=455,y=210)  # Adjust x so panels don't overlap
+        panel4 = ctk.CTkFrame(main, fg_color=bg_color_panel, corner_radius=10, width=215, height=430)
+        panel4.place(x=455,y=210)
         panel4.pack_propagate(False)
-        ctk.CTkLabel(panel4, text="Completed Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-        ctk.CTkLabel(panel4, text=str(completed), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
 
-        panel5 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=220, height=430)
-        panel5.place(x=680,y=210)  # Adjust x so panels don't overlap
+        panel5 = ctk.CTkFrame(main, fg_color=bg_color_panel, corner_radius=10, width=220, height=430)
+        panel5.place(x=680,y=210)
         panel5.pack_propagate(False)
-        ctk.CTkLabel(panel5, text="Completed Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-        ctk.CTkLabel(panel5, text=str(completed), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
-
-        # Panel 2: Completed Tasks
-       # panel2 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=10, height=10)
-       # panel2.place(x=start_x + panel_width + gap_x, y=start_y)
-        #panel2.pack_propagate(False)  # <-- Add this line
-       # ctk.CTkLabel(panel2, text="Completed Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-       # ctk.CTkLabel(panel2, text=str(completed), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
-
-        # Panel 3: Upcoming Deadlines
-       # panel3 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=10, height=10)
-       # panel3.place(x=start_x + 2*(panel_width + gap_x), y=start_y)
-       # panel3.pack_propagate(False)  # <-- Add this line
-       # ctk.CTkLabel(panel3, text="Upcoming Deadlines", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-       # ctk.CTkLabel(panel3, text=str(upcoming), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
-
-        # Panel 4: Total Tasks
-       # panel4 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=10, height=10)
-       # panel4.place(x=start_x + 3*(panel_width + gap_x), y=start_y)
-       # panel4.pack_propagate(False)  # <-- Add this line
-       # ctk.CTkLabel(panel4, text="Total Tasks", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-       # ctk.CTkLabel(panel4, text=str(total), font=("Arial", 22, "bold"), text_color="#2980b9").pack()
-
-        # Panel 5: Progress
-      #  panel5 = ctk.CTkFrame(main, fg_color="white", corner_radius=10, width=10, height=10)
-       # panel5.place(x=start_x + 4*(panel_width + gap_x), y=start_y)
-       # panel5.pack_propagate(False)  # <-- Add this line
-       # ctk.CTkLabel(panel5, text="Progress (%)", font=("Arial", 15, "bold"), text_color="#23272e").pack(pady=(18, 8))
-       # ctk.CTkLabel(panel5, text=progress, font=("Arial", 22, "bold"), text_color="#2980b9").pack()
 
     def show_add_deadline():
         clear_main()

@@ -10,13 +10,15 @@ def connect():
 # ---------- Schema Creation ----------
 def create_user_table():
     with connect() as conn:
-        conn.execute("""
+        cursor = conn.cursor()
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL
             )
         """)
+        conn.commit()
 
 def create_task_table():
     """Create tasks table with richer fields; keep backward-compat columns."""
@@ -90,6 +92,15 @@ def insert_user(username, password_hash):
         print(f"[DB] insert_user error: {e}")
         return False
 
+def get_all_users():
+    import sqlite3
+    conn = sqlite3.connect("your_database.db")  # Use your actual DB path
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, password FROM users")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"username": row[0], "password": row[1]} for row in rows]
+
 # ---------- Task Ops ----------
 def add_task(user_id, username, title, start_date, due_date,
             description=None, priority=None, category=None, location=None,
@@ -131,3 +142,10 @@ def update_task_completion(task_id, completed: int):
     with connect() as conn:
         conn.execute("UPDATE tasks SET completed = ?, status = ? WHERE id = ?",
                      (completed, "Completed" if completed else "Pending", task_id))
+
+def change_user_password(username, new_password):
+    with connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password=? WHERE username=?", (new_password, username))
+        conn.commit()
+        return cursor.rowcount > 0  # True if a row was updated
