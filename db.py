@@ -105,6 +105,10 @@ def get_all_users():
 def add_task(user_id, username, title, start_date, due_date,
             description=None, priority=None, category=None, location=None,
             notes=None, notify=None, status="Pending"):
+    # Ensure due_date is not empty
+    if not due_date:
+        raise ValueError("Due date is required.")
+    
     with connect() as conn:
         conn.execute("""
             INSERT INTO tasks (user_id, username, title, description, priority, category, location,
@@ -114,22 +118,25 @@ def add_task(user_id, username, title, start_date, due_date,
               notes, notify, status, start_date, due_date))
 
 def get_tasks(user_id=None, username=None, completed=0):
-    """Prefer user_id; fallback to username for old rows."""
+    """Fetch tasks with extended fields like description, notes, etc."""
     with connect() as conn:
         cur = conn.cursor()
         if user_id is not None:
             cur.execute("""
-                SELECT id, title, start_date, due_date, completed, status, priority, category
-                FROM tasks WHERE (user_id = ? OR (user_id IS NULL AND username = ?)) AND completed = ?
+                SELECT id, title, start_date, due_date, completed, status, priority, category, description, notes, notify
+                FROM tasks
+                WHERE (user_id = ? OR (user_id IS NULL AND username = ?)) AND completed = ?
                 ORDER BY due_date IS NULL, due_date ASC
             """, (user_id, username or "", completed))
         else:
             cur.execute("""
-                SELECT id, title, start_date, due_date, completed, status, priority, category
-                FROM tasks WHERE username = ? AND completed = ?
+                SELECT id, title, start_date, due_date, completed, status, priority, category, description, notes, notify
+                FROM tasks
+                WHERE username = ? AND completed = ?
                 ORDER BY due_date IS NULL, due_date ASC
             """, (username, completed))
         return cur.fetchall()
+
 
 def get_completed_tasks(user_id=None, username=None):
     return get_tasks(user_id, username, completed=1)

@@ -101,7 +101,7 @@ def open_dashboard(username, app):
         # --- Tab buttons row ---
         tabs = ctk.CTkFrame(main, fg_color=panel_color)
         tabs.pack(fill="x", pady=5)
-        for name in ["Edit Deadline", "Privacy Settings", "Alerts", "Set Reminder"]:
+        for name in ["Add Task", "Edit Task", "Timer", "Set Reminder"]:
             ctk.CTkButton(tabs, text=name, fg_color="transparent",
                           text_color=text_color, hover_color="#ddd",
                           width=140).pack(side="left", padx=5)
@@ -109,11 +109,11 @@ def open_dashboard(username, app):
         # --- Card form ---
         form = ctk.CTkFrame(main, fg_color=panel_color, border_width=1, corner_radius=10)
         form.pack(fill="both", expand=True, padx=30, pady=20)
-
-        # Grid form layout
+        # Grid form layout (Start Date above Due Date, both in column 1)
         fields = [
             ("Task Name", "Project Launch", 0, 0),
-            ("Due Date", datetime.today().strftime("%Y-%m-%d"), 0, 1),
+            ("Start Date", datetime.today().strftime("%Y-%m-%d"), 0, 1),
+            ("Due Date", datetime.today().strftime("%Y-%m-%d"), 1, 1),
             ("Description", "Launch the new project.", 1, 0),
             ("Priority", "High", 2, 0),
             ("Notify Me", "1 day before", 2, 1),
@@ -128,22 +128,66 @@ def open_dashboard(username, app):
             frame = ctk.CTkFrame(form, fg_color=panel_color)
             frame.grid(row=r, column=c, padx=20, pady=10, sticky="ew")
             ctk.CTkLabel(frame, text=label, text_color=text_color, anchor="w").pack(anchor="w")
-            if label == "Due Date":
+            if label in ["Start Date", "Due Date"]:
                 entry = DateEntry(frame, date_pattern="yyyy-mm-dd")
                 entry.pack(fill="x")
+            elif label == "Priority":
+                priority_options = ["Low", "Medium", "High"]
+
+                # Create an OptionMenu for the priority selection
+                entry = ctk.CTkOptionMenu(
+                    frame,
+                    values=priority_options,
+                    fg_color=entry_bg_color,
+                    text_color=entry_fg_color,
+                    dropdown_fg_color=entry_bg_color,
+                    button_color=button_fg_color,
+                    command=lambda choice: highlight_priority(choice)  # Handle the color change
+                )
+                entry.set("High")  # Default value
+                entry.pack(fill="x")
+                
+
             else:
                 entry = ctk.CTkEntry(frame, placeholder_text=placeholder, fg_color=entry_bg_color, text_color=entry_fg_color)
                 entry.pack(fill="x")
             entries[label] = entry
 
+        def highlight_priority(priority):
+            # Change the background color based on the priority
+            if priority == "Low":
+                entries["Priority"].configure(fg_color="#2ecc71")  # Green
+            elif priority == "Medium":
+                entries["Priority"].configure(fg_color="#f1c40f")  # Yellow
+            else:  # High
+                entries["Priority"].configure(fg_color="#e74c3c")  # Red
+
         def add_deadline():
             t = entries["Task Name"].get().strip()
-            d = entries["Due Date"].get()
+            start = entries["Start Date"].get()
+            due = entries["Due Date"].get()  # Ensure this gets a valid due date
+
+            # Debugging: Print the collected values
+            print(f"Task Name: {t}, Start Date: {start}, Due Date: {due}")  # Debugging output
+
             if not t:
                 messagebox.showwarning("Missing Task Name", "Please enter a task name.")
                 return
-            db.add_task(username, t, datetime.today().strftime("%Y-%m-%d"), d)
-            messagebox.showinfo("Added", "Deadline added!")
+
+            # Ensure `due` is not empty or None
+            if not due:
+                messagebox.showwarning("Missing Due Date", "Please enter a due date.")
+                return
+
+            # Assuming `user_id` is available, for example, from your `db.get_user()` function
+            user_id = 1  # Example user_id, replace with actual logic to retrieve user_id
+
+            # Add the task
+            try:
+                db.add_task(user_id, username, t, start, due)  # Pass due_date properly
+                messagebox.showinfo("Added", "Deadline added!")
+            except ValueError as e:
+                messagebox.showwarning("Error", str(e))  # Show if due_date is missing or invalid
             show_mytasks()
 
         ctk.CTkButton(form, text="Add Deadline", fg_color="black",
@@ -162,28 +206,45 @@ def open_dashboard(username, app):
 
     def show_mytasks():
         clear_main()
-        ctk.CTkLabel(main, text="📝 My Tasks", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=10)
+        panel1 = ctk.CTkFrame(main, fg_color=bg_color_panel, corner_radius=10, width=905, height=640)
+        panel1.place(x=0, y=0)
+        panel1.pack_propagate(False)
 
-        tasks = db.get_tasks(username)
+        ctk.CTkLabel(panel1, text="📝 My Tasks", font=("Arial", 20, "bold"), text_color=text_color).pack(pady=10)
+        tasks = db.get_tasks(username=username)
+
         if not tasks:
-            ctk.CTkLabel(main, text="No active tasks.", text_color="#888").pack(pady=20)
+            ctk.CTkLabel(panel1, text="No active tasks.", text_color="#888").pack(pady=20)
             return
 
         for t in tasks:
-            card = ctk.CTkFrame(main, fg_color=panel_color, border_width=1, corner_radius=10)
+            task_id, title, start_date, due_date, completed, status, priority, category, description, notes, notify = t
+
+            card = ctk.CTkFrame(panel1, fg_color=panel_color, border_width=1, corner_radius=10)
             card.pack(fill="x", padx=30, pady=10)
 
-            ctk.CTkLabel(card, text=f"{t[1]} (Due: {t[3]})", anchor="w", text_color=text_color,
-                         font=("Arial", 15, "bold")).pack(side="left", padx=10, pady=10)
+            ctk.CTkLabel(card, text=f"{title} (Due: {due_date})", anchor="w", text_color=text_color,
+                         font=("Arial", 15, "bold")).pack(anchor="w", padx=10, pady=(8, 0))
 
-            # Buttons
-            ctk.CTkButton(card, text="✅ Done", width=70,
-                          command=lambda tid=t[0]: (db.update_task_completion(tid, 1), show_mytasks())
-                          ).pack(side="right", padx=5, pady=10)
-            ctk.CTkButton(card, text="❌ Delete", fg_color=danger_fg_color,
+            info_text = f"Start: {start_date or 'N/A'} | Priority: {priority or 'N/A'} | Category: {category or 'N/A'} | Status: {status or 'Pending'}"
+            ctk.CTkLabel(card, text=info_text, anchor="w", text_color="#888").pack(anchor="w", padx=10)
+
+            if description:
+                ctk.CTkLabel(card, text=f"📝 {description}", anchor="w", text_color="#aaa", wraplength=700).pack(anchor="w", padx=10, pady=(5, 0))
+            if notes:
+                ctk.CTkLabel(card, text=f"📌 {notes}", anchor="w", text_color="#888", wraplength=700).pack(anchor="w", padx=10, pady=(0, 5))
+
+            btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+            btn_frame.pack(anchor="e", padx=10, pady=5)
+
+            ctk.CTkButton(btn_frame, text="✅ Done", width=70,
+                          command=lambda tid=task_id: (db.update_task_completion(tid, 1), show_mytasks())
+                          ).pack(side="left", padx=5)
+            ctk.CTkButton(btn_frame, text="❌ Delete", fg_color=danger_fg_color,
                           hover_color=danger_hover_color, width=70,
-                          command=lambda tid=t[0]: (db.delete_task(tid), show_mytasks())
-                          ).pack(side="right", padx=5, pady=10)
+                          command=lambda tid=task_id: (db.delete_task(tid), show_mytasks())
+                          ).pack(side="left", padx=5)
+
 
     def show_reports():
         clear_main()
@@ -196,7 +257,7 @@ def open_dashboard(username, app):
     # -------------------- Sidebar Buttons --------------------
     nav_items = [
         ("📊 Overview", show_overview),
-        ("➕ Add Deadline", show_add_deadline),
+        ("➕ Activities", show_add_deadline),
         ("⏰ Upcoming Deadlines", show_upcoming),
         ("📝 My Tasks", show_mytasks),
         ("📈 Progress Reports", show_reports),
