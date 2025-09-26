@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Global Background Colors */
+    --global-bg-primary: #171717;
+    --global-bg-secondary: #323232;
+    
+    /* Global Text Colors */
+    --global-text-primary: #fcfcfc;
+    
+    /* Component-specific Colors */
+    --sidebar-bg: #323232;
+    --menu-text-color: #fcfcfc;
+    
+    /* Typography Variables */
+    --font-size-lg: 30px;
+    --font-weight-normal: 400;
+    --line-height-lg: 37px;
+    --font-family-primary: 'Inter';
+    
+    /* Spacing Variables */
+    --spacing-xs: 6px;
+    --spacing-sm: 10px;
+    --spacing-md: 40px;
+    --spacing-lg: 46px;
+    --spacing-xl: 70px;
+    --spacing-2xl: 354px;
+    --spacing-3xl: 386px;
+    
+    /* Layout Variables */
+    --width-sidebar: 36%;
+    --width-auto: auto;
+    --width-flex: flex-1;
+    --width-full: 100%;
+  }
+}
