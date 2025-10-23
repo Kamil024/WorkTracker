@@ -1,71 +1,41 @@
-import hashlib
-import base64
-import os
 import db
 import json
+import os
 
 LOGIN_STATE_FILE = "login_state.json"
-PBKDF2_ITERATIONS = 100_000
-SALT_BYTES = 16
 
-def _pbkdf2_hash(password: str, salt: bytes | None = None) -> str:
-    """Returns base64(salt + derived_key)."""
-    if salt is None:
-        salt = os.urandom(SALT_BYTES)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
-    return base64.b64encode(salt + dk).decode("utf-8")
-
-def _pbkdf2_verify(stored_b64: str, password: str) -> bool:
-    try:
-        raw = base64.b64decode(stored_b64.encode("utf-8"))
-        salt, stored_dk = raw[:SALT_BYTES], raw[SALT_BYTES:]
-        new_dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
-        return stored_dk == new_dk
-    except Exception:
-        return False
-
-def register_user(username: str, password: str):
-    if not username.strip() or not password.strip():
-        return False, "Username and password cannot be empty."
-    if db.get_user(username):
-        return False, "Username already exists."
-    hashed = _pbkdf2_hash(password)
-    success = db.insert_user(username, hashed)
-    if success:
-        return True, "Registration successful."
-    return False, "Registration failed."
-
-def login_user(username: str, password: str):
+def authenticate_user(username, password):
+    """Return True if credentials match a user in the database."""
     user = db.get_user(username)
     if not user:
-        return False, "Invalid username or password.", None
-    # user = (id, username, password_hash)
-    if _pbkdf2_verify(user[2], password):
-        return True, "Login successful.", user
-    return False, "Invalid username or password.", None
+        return False
+    stored_password = user[2]  # assuming columns: id, username, password
+    return stored_password == password
 
-def save_login_state(username: str):
-    try:
-        with open(LOGIN_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"username": username}, f)
-    except Exception as e:
-        print(f"[STATE] Failed saving login state: {e}")
+def register_user(username, password):
+    """Register a new user if username not taken."""
+    if db.get_user(username):
+        return False  # already exists
+    db.add_user(username, password)
+    return True
+
+def save_login_state(username):
+    """Save current logged-in user to file for auto-login."""
+    with open(LOGIN_STATE_FILE, "w") as f:
+        json.dump({"username": username}, f)
 
 def load_login_state():
-    try:
-        if os.path.exists(LOGIN_STATE_FILE):
-            with open(LOGIN_STATE_FILE, "r", encoding="utf-8") as f:
+    """Return username if saved login state exists."""
+    if os.path.exists(LOGIN_STATE_FILE):
+        try:
+            with open(LOGIN_STATE_FILE, "r") as f:
                 data = json.load(f)
                 return data.get("username")
-    except Exception as e:
-        print(f"[STATE] Failed loading login state: {e}")
+        except Exception:
+            return None
     return None
 
-def logout() -> bool:
-    try:
-        if os.path.exists(LOGIN_STATE_FILE):
-            os.remove(LOGIN_STATE_FILE)
-        return True
-    except Exception as e:
-        print(f"[STATE] Logout failed: {e}")
-        return False
+def logout():
+    """Clear saved login state."""
+    if os.path.exists(LOGIN_STATE_FILE):
+        os.remove(LOGIN_STATE_FILE)

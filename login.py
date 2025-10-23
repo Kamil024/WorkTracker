@@ -1,165 +1,219 @@
-import os
-import subprocess
-import customtkinter as ctk
-from tkinter import messagebox
-from PIL import Image, UnidentifiedImageError
-from auth import login_user, register_user, save_login_state
-from settings import load_theme_preference, save_theme_preference
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from tkinter import messagebox, Canvas, font as tkFont
+from auth import authenticate_user, register_user, save_login_state
+from dashboard import open_dashboard
 
-def show_startup(app):
-    """Display the login/register screen with theme support and safe icon handling."""
 
-    # --- Load theme preference ---
-    saved_theme = load_theme_preference()
-    current_theme = {"mode": saved_theme}
+class LoginWindow(ttk.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master
 
-    # Theme dictionaries
-    light_theme = {
-        "bg": "#ffffff", "card": "#ffffff", "text": "#111827", "subtitle": "#6b7280",
-        "entry_fg": "#111827", "entry_bg": "#ffffff", "entry_border": "#d1d5db",
-        "placeholder": "#6b7280", "checkbox": "#111827",
-        "button_login": "#2563eb", "button_login_hover": "#1d4ed8",
-        "button_register": "#22c55e", "button_register_hover": "#16a34a",
-        "footer": "#6b7280", "icon": "🗓"
-    }
+        self.username_var = ttk.StringVar()
+        self.password_var = ttk.StringVar()
+        self.name_var = ttk.StringVar()
+        self.is_signup = False
 
-    dark_theme = {
-        "bg": "#181a20", "card": "#181a20", "text": "#f3f4f6", "subtitle": "#6b7280",
-        "entry_fg": "#f3f4f6", "entry_bg": "#181a20", "entry_border": "#374151",
-        "placeholder": "#6b7280", "checkbox": "#f3f4f6",
-        "button_login": "#2563eb", "button_login_hover": "#1d4ed8",
-        "button_register": "#22c55e", "button_register_hover": "#16a34a",
-        "footer": "#6b7280", "icon": "🌙"
-    }
+        self.master.columnconfigure(0, weight=1)
+        self.master.rowconfigure(0, weight=1)
 
-    theme = light_theme if saved_theme == "light" else dark_theme
-    app.configure(fg_color=theme["bg"])
+        # Gradient background
+        self.gradient = Canvas(self.master, highlightthickness=0)
+        self.gradient.grid(row=0, column=0, sticky="nsew")
 
-    # Clear old widgets
-    for widget in app.winfo_children():
-        widget.destroy()
+        # Container
+        self.container = ttk.Frame(self.master)
+        self.container.grid(row=0, column=0, sticky="nsew")
+        self.container.columnconfigure(0, weight=1)
+        self.container.rowconfigure(0, weight=1)
 
-    # --- Main container ---
-    outer = ctk.CTkFrame(master=app, corner_radius=16, fg_color=theme["card"])
-    outer.pack(pady=60, padx=60, fill="both", expand=True)
+        # Main frame
+        self.main_frame = ttk.Frame(self.container)
+        self.main_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.92, relheight=0.88)
+        self.main_frame.columnconfigure(0, weight=1, uniform="col")
+        self.main_frame.columnconfigure(1, weight=1, uniform="col")
+        self.main_frame.rowconfigure(0, weight=1)
 
-    # Title
-    title_label = ctk.CTkLabel(
-        outer, text=f"{theme['icon']} Work Tracker",
-        font=("Arial", 28, "bold"), text_color=theme["text"]
-    )
-    title_label.pack(pady=(30, 8))
+        self.create_styles()
+        self.build_ui()
 
-    # Subtitle
-    subtitle_label = ctk.CTkLabel(
-        outer, text="Track that thang", font=("Arial", 14), text_color=theme["subtitle"]
-    )
-    subtitle_label.pack(pady=(0, 24))
+        self.master.bind("<Configure>", self.on_resize)
 
-    # Username / Password
-    username_entry = ctk.CTkEntry(
-        outer, placeholder_text="Username", height=48, width=340,
-        fg_color=theme["entry_bg"], border_color=theme["entry_border"], border_width=2,
-        text_color=theme["entry_fg"], placeholder_text_color=theme["placeholder"], font=("Arial", 14)
-    )
-    username_entry.pack(pady=8)
+    # ---------------------- STYLES ----------------------
+    def create_styles(self):
+        self.base_fonts = {
+            "title": tkFont.Font(family="Segoe UI Semibold", size=28),
+            "subtitle": tkFont.Font(family="Segoe UI", size=12),
+            "feature": tkFont.Font(family="Segoe UI Semibold", size=12),
+            "gray": tkFont.Font(family="Segoe UI", size=10),
+            "entry": tkFont.Font(family="Segoe UI", size=10),
+            "button": tkFont.Font(family="Segoe UI Semibold", size=10),
+        }
 
-    password_entry = ctk.CTkEntry(
-        outer, placeholder_text="Password", show="*", height=48, width=340,
-        fg_color=theme["entry_bg"], border_color=theme["entry_border"], border_width=2,
-        text_color=theme["entry_fg"], placeholder_text_color=theme["placeholder"], font=("Arial", 14)
-    )
-    password_entry.pack(pady=8)
+        style = ttk.Style()
+        style.configure("Title.TLabel", font=self.base_fonts["title"], foreground="#212121")
+        style.configure("Subtitle.TLabel", font=self.base_fonts["subtitle"], foreground="#6B728E")
+        style.configure("Feature.TLabel", font=self.base_fonts["feature"])
+        style.configure("Gray.TLabel", font=self.base_fonts["gray"], foreground="#9CA3AF")
+        style.configure("Custom.TEntry", padding=6, relief="flat", font=self.base_fonts["entry"])
+        style.configure("Primary.TButton", font=self.base_fonts["button"], padding=8)
+        style.configure("Card.TFrame", background="white", relief="flat")
 
-    # Keep logged in
-    keep_logged_in = ctk.CTkCheckBox(
-        outer, text="Keep me logged in", text_color=theme["checkbox"], font=("Arial", 13)
-    )
-    keep_logged_in.pack(pady=(12, 18), anchor="center")
+    # ---------------------- BUILD UI ----------------------
+    def build_ui(self):
+        # LEFT PANEL
+        left = ttk.Frame(self.main_frame)
+        left.grid(row=0, column=0, sticky="nsew", padx=(40, 20), pady=30)
+        left.columnconfigure(0, weight=1)
 
-    # --- Logic ---
-    def try_login():
-        username, password = username_entry.get().strip(), password_entry.get()
-        ok, msg, user = login_user(username, password)
-        if ok:
-            from dashboard import open_dashboard
-            if keep_logged_in.get():
-                save_login_state(username)
-            open_dashboard(username, app)
+        self.brand_label = ttk.Label(left, text="WorkTracker Pro", font=("Segoe UI Black", 34), foreground="#4B6EF5")
+        self.brand_label.pack(pady=(20, 10))
+
+        self.brand_sub = ttk.Label(
+            left,
+            text="Stay productive, stay organized, and achieve your goals effortlessly.",
+            style="Subtitle.TLabel",
+            wraplength=380,
+            justify="center",
+        )
+        self.brand_sub.pack(pady=(0, 30))
+
+        features = [
+            ("🕒 Smart Timer", "Boost focus with adaptive Pomodoro cycles."),
+            ("✅ Task Priority", "Track what matters most."),
+            ("📊 Analytics", "Visualize your progress over time."),
+        ]
+        for title, desc in features:
+            box = ttk.Frame(left, padding=8)
+            box.pack(fill=X, padx=10, pady=8)
+            ttk.Label(box, text=title, style="Feature.TLabel").pack(anchor=W)
+            ttk.Label(box, text=desc, style="Gray.TLabel").pack(anchor=W)
+
+        # RIGHT PANEL (login card)
+        right = ttk.Frame(self.main_frame)
+        right.grid(row=0, column=1, sticky="nsew", padx=(20, 40), pady=30)
+        right.columnconfigure(0, weight=1)
+
+        self.card = ttk.Frame(right, padding=28, style="Card.TFrame")
+        self.card.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.75)
+        self.card.columnconfigure(0, weight=1)
+
+        self.title_label = ttk.Label(self.card, text="Welcome Back 👋", style="Title.TLabel")
+        self.title_label.grid(row=0, column=0, pady=(0, 6))
+
+        self.subtitle_label = ttk.Label(self.card, text="Sign in to continue to WorkTracker", style="Subtitle.TLabel")
+        self.subtitle_label.grid(row=1, column=0, pady=(0, 20))
+
+        # Dynamic field section
+        self.fields_frame = ttk.Frame(self.card)
+        self.fields_frame.grid(row=2, column=0, sticky="ew")
+        self.fields_frame.columnconfigure(0, weight=1)
+
+        # Build default login fields
+        self.build_login_fields()
+
+        ttk.Label(self.card, text="✨ Stay signed in for faster access", style="Gray.TLabel").grid(row=6, column=0, pady=(16, 0))
+
+    def build_login_fields(self):
+        """Create the input fields depending on mode."""
+        for widget in self.fields_frame.winfo_children():
+            widget.destroy()
+
+        if self.is_signup:
+            ttk.Label(self.fields_frame, text="Full Name").grid(row=0, column=0, sticky=W)
+            ttk.Entry(self.fields_frame, textvariable=self.name_var, width=36, style="Custom.TEntry").grid(row=1, column=0, pady=(4, 10))
+
+        ttk.Label(self.fields_frame, text="Username").grid(row=2, column=0, sticky=W)
+        self.username_entry = ttk.Entry(self.fields_frame, textvariable=self.username_var, width=36, style="Custom.TEntry")
+        self.username_entry.grid(row=3, column=0, pady=(4, 12))
+
+        ttk.Label(self.fields_frame, text="Password").grid(row=4, column=0, sticky=W)
+        self.password_entry = ttk.Entry(self.fields_frame, textvariable=self.password_var, width=36, show="•", style="Custom.TEntry")
+        self.password_entry.grid(row=5, column=0, pady=(4, 18))
+
+        btn_text = "Sign Up" if self.is_signup else "Sign In"
+        self.sign_in_btn = ttk.Button(self.fields_frame, text=btn_text, bootstyle="PRIMARY", width=26, command=self.handle_auth)
+        self.sign_in_btn.grid(row=6, column=0, pady=(0, 10))
+
+        switch_text = "Back to Login" if self.is_signup else "Create an Account"
+        self.switch_button = ttk.Button(self.fields_frame, text=switch_text, bootstyle="SECONDARY", width=26, command=self.toggle_mode)
+        self.switch_button.grid(row=7, column=0)
+
+    # ---------------------- RESPONSIVE BEHAVIOR ----------------------
+    def draw_gradient(self, w, h):
+        """Dynamic gradient background."""
+        self.gradient.delete("gradient")
+        color_top = (80, 120, 250)
+        color_bot = (165, 95, 200)
+        steps = max(h, 2)
+        for i in range(steps):
+            r = int(color_top[0] + (color_bot[0] - color_top[0]) * (i / steps))
+            g = int(color_top[1] + (color_bot[1] - color_top[1]) * (i / steps))
+            b = int(color_top[2] + (color_bot[2] - color_top[2]) * (i / steps))
+            color = f"#{r:02x}{g:02x}{b:02x}"
+            self.gradient.create_line(0, i, w, i, fill=color, tags="gradient")
+        self.gradient.lower("gradient")
+
+    def on_resize(self, event):
+        w, h = self.master.winfo_width(), self.master.winfo_height()
+        if w <= 0 or h <= 0:
+            return
+
+        self.gradient.config(width=w, height=h)
+        self.draw_gradient(w, h)
+
+        # Font scaling
+        scale = max(0.6, min(1.5, w / 1100))
+        for key, base_font in self.base_fonts.items():
+            size_map = {
+                "title": 28, "subtitle": 12, "feature": 12,
+                "gray": 10, "entry": 10, "button": 10
+            }
+            base_font.configure(size=int(size_map[key] * scale))
+
+        # Brand label scaling
+        self.brand_label.configure(font=("Segoe UI Black", int(34 * scale)))
+        self.brand_sub.configure(wraplength=int(max(250, w * 0.35)))
+
+        # Adjust card size dynamically
+        card_w = 0.8 if w > 1000 else 0.9
+        card_h = 0.75 if h > 600 else 0.85
+        self.card.place(relwidth=card_w, relheight=card_h, relx=0.5, rely=0.5, anchor="center")
+
+    # ---------------------- AUTH LOGIC ----------------------
+    def toggle_mode(self):
+        self.is_signup = not self.is_signup
+        if self.is_signup:
+            self.title_label.configure(text="Join WorkTracker 🚀")
+            self.subtitle_label.configure(text="Create your account below")
         else:
-            messagebox.showerror("Login Failed", msg)
+            self.title_label.configure(text="Welcome Back 👋")
+            self.subtitle_label.configure(text="Sign in to continue to WorkTracker")
+        self.build_login_fields()
 
-    def try_register():
-        username, password = username_entry.get().strip(), password_entry.get()
-        ok, msg = register_user(username, password)
-        if ok:
-            messagebox.showinfo("Registration", msg)
+    def handle_auth(self):
+        username = self.username_var.get().strip()
+        password = self.password_var.get().strip()
+        name = self.name_var.get().strip()
+
+        if not username or not password or (self.is_signup and not name):
+            messagebox.showwarning("Missing Info", "Please fill in all fields.")
+            return
+
+        if self.is_signup:
+            success = register_user(username, password)
+            if success:
+                messagebox.showinfo("Success", "Account created successfully!")
+                self.toggle_mode()
+            else:
+                messagebox.showerror("Error", "Username already exists.")
         else:
-            messagebox.showerror("Error", msg)
-
-    app.bind('<Return>', lambda event: try_login())
-
-    # Buttons
-    ctk.CTkButton(
-        outer, text="Login", height=48, width=340,
-        fg_color=theme["button_login"], hover_color=theme["button_login_hover"],
-        font=("Arial", 15, "bold"), command=try_login
-    ).pack(pady=(0, 12))
-
-    ctk.CTkButton(
-        outer, text="Register", height=48, width=340,
-        fg_color=theme["button_register"], hover_color=theme["button_register_hover"],
-        font=("Arial", 15, "bold"), command=try_register
-    ).pack(pady=(0, 18))
-
-    # --- Test Button ---
-    def open_test():
-        test_file_path = os.path.join(os.path.dirname(__file__), 'test.py')
-        if os.path.exists(test_file_path):
-            try:
-                subprocess.Popen(["python", test_file_path])
-            except Exception as e:
-                messagebox.showerror("Launch Error", f"Could not run test.py:\n{e}")
-        else:
-            messagebox.showerror("File Not Found", "The test.py file was not found.")
-
-    ctk.CTkButton(
-        outer, text="Test", height=48, width=340,
-        fg_color="#8e44ad", hover_color="#9b59b6",
-        font=("Arial", 15, "bold"), command=open_test
-    ).pack(pady=(0, 18))
-
-    # Footer
-    footer = ctk.CTkLabel(
-        outer, text="© 2025 Work Tracker", font=("Arial", 11), text_color=theme["footer"]
-    )
-    footer.pack(pady=(10, 0))
-
-    # --- Theme Toggle (Top-right) ---
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    light_icon_path = os.path.join(BASE_DIR, "light-mode.png")
-    dark_icon_path  = os.path.join(BASE_DIR, "dark-mode.png")
-
-    try:
-        light_icon = ctk.CTkImage(Image.open(light_icon_path), size=(25, 25))
-        dark_icon  = ctk.CTkImage(Image.open(dark_icon_path),  size=(25, 25))
-    except (FileNotFoundError, UnidentifiedImageError):
-        light_icon = dark_icon = None
-
-    toggle_frame = ctk.CTkFrame(outer, width=70, height=28, corner_radius=14,
-                                fg_color="#dcdde1" if saved_theme == "light" else "#444")
-    toggle_frame.place(relx=0.95, rely=0.05, anchor="ne")
-
-    slider_circle = ctk.CTkLabel(toggle_frame,
-                                 image=(dark_icon if saved_theme == "light" else light_icon),
-                                 width=28, height=28, fg_color="white", corner_radius=14, text="")
-    slider_circle.place(relx=0.8 if saved_theme == "light" else 0.2, rely=0.5, anchor="center")
-
-    def toggle_theme():
-        current_theme["mode"] = "dark" if current_theme["mode"] == "light" else "light"
-        save_theme_preference(current_theme["mode"])
-        # Re-render screen to apply new theme cleanly
-        show_startup(app)
-
-    toggle_frame.bind("<Button-1>", lambda e: toggle_theme())
-    slider_circle.bind("<Button-1>", lambda e: toggle_theme())
+            user = authenticate_user(username, password)
+            if user:
+                save_login_state(user)
+                for widget in self.master.winfo_children():
+                    widget.destroy()
+                open_dashboard(user, self.master)
+            else:
+                messagebox.showerror("Error", "Invalid username or password.")
