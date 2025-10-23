@@ -1,9 +1,8 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from tkinter import messagebox, Canvas, font as tkFont
-from auth import authenticate_user, register_user, save_login_state
+from tkinter import messagebox, Canvas, font as tkFont, W, X
+import auth
 from dashboard import open_dashboard
-
 
 class LoginWindow(ttk.Frame):
     def __init__(self, master):
@@ -142,7 +141,6 @@ class LoginWindow(ttk.Frame):
 
     # ---------------------- RESPONSIVE BEHAVIOR ----------------------
     def draw_gradient(self, w, h):
-        """Dynamic gradient background."""
         self.gradient.delete("gradient")
         color_top = (80, 120, 250)
         color_bot = (165, 95, 200)
@@ -160,10 +158,10 @@ class LoginWindow(ttk.Frame):
         if w <= 0 or h <= 0:
             return
 
-        self.gradient.config(width=w, height=h)
-        self.draw_gradient(w, h)
+        if self.gradient.winfo_exists():
+            self.gradient.config(width=w, height=h)
+            self.draw_gradient(w, h)
 
-        # Font scaling
         scale = max(0.6, min(1.5, w / 1100))
         for key, base_font in self.base_fonts.items():
             size_map = {
@@ -172,14 +170,16 @@ class LoginWindow(ttk.Frame):
             }
             base_font.configure(size=int(size_map[key] * scale))
 
-        # Brand label scaling
-        self.brand_label.configure(font=("Segoe UI Black", int(34 * scale)))
-        self.brand_sub.configure(wraplength=int(max(250, w * 0.35)))
+        if hasattr(self, "brand_label") and self.brand_label.winfo_exists():
+            self.brand_label.configure(font=("Segoe UI Black", int(34 * scale)))
 
-        # Adjust card size dynamically
-        card_w = 0.8 if w > 1000 else 0.9
-        card_h = 0.75 if h > 600 else 0.85
-        self.card.place(relwidth=card_w, relheight=card_h, relx=0.5, rely=0.5, anchor="center")
+        if hasattr(self, "brand_sub") and self.brand_sub.winfo_exists():
+            self.brand_sub.configure(wraplength=int(max(250, w * 0.35)))
+
+        if hasattr(self, "card") and self.card.winfo_exists():
+            card_w = 0.8 if w > 1000 else 0.9
+            card_h = 0.75 if h > 600 else 0.85
+            self.card.place(relwidth=card_w, relheight=card_h, relx=0.5, rely=0.5, anchor="center")
 
     # ---------------------- AUTH LOGIC ----------------------
     def toggle_mode(self):
@@ -202,16 +202,16 @@ class LoginWindow(ttk.Frame):
             return
 
         if self.is_signup:
-            success = register_user(username, password)
+            success = auth.register_user(username, password)
             if success:
                 messagebox.showinfo("Success", "Account created successfully!")
                 self.toggle_mode()
             else:
                 messagebox.showerror("Error", "Username already exists.")
         else:
-            user = authenticate_user(username, password)
+            user = auth.authenticate_user(username, password)
             if user:
-                save_login_state(user)
+                # Clear login UI
                 for widget in self.master.winfo_children():
                     widget.destroy()
                 open_dashboard(user, self.master)
