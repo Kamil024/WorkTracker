@@ -5,24 +5,18 @@ import os
 LOGIN_STATE_FILE = "login_state.json"
 
 def authenticate_user(username, password):
-    """Return True if credentials match a user in the database."""
-    user = db.get_user(username)
-    if not user:
-        return False
-    stored_password = user[2]  # assuming columns: id, username, password
-    return stored_password == password
+    """Return user dict if credentials match a user in the database."""
+    user = db.authenticate_user(username, password)
+    return user
 
 def register_user(username, password):
     """Register a new user if username not taken."""
-    if db.get_user(username):
-        return False  # already exists
-    db.add_user(username, password)
-    return True
+    return db.register_user(username, password)
 
-def save_login_state(username):
-    """Save current logged-in user to file for auto-login."""
+def save_login_state(user):
+    """Save current logged-in user info to file for auto-login."""
     with open(LOGIN_STATE_FILE, "w") as f:
-        json.dump({"username": username}, f)
+        json.dump({"username": user["username"]}, f)
 
 def load_login_state():
     """Return username if saved login state exists."""
