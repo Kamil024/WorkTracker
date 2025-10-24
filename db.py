@@ -5,6 +5,8 @@ import os
 DB_NAME = "worktracker.db"
 SESSION_FILE = "session.json"
 
+# ---------- DATABASE CONNECTION ----------
+
 def connect():
     return sqlite3.connect(DB_NAME)
 
@@ -41,8 +43,14 @@ def migrate_schema_if_needed():
 def insert_user(username, password):
     try:
         with connect() as conn:
-            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            conn.execute(
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                (username, password)
+            )
         return True
+    except sqlite3.IntegrityError:
+        print(f"[DB] Username '{username}' already exists.")
+        return False
     except Exception as e:
         print(f"[DB] insert_user error: {e}")
         return False
@@ -55,11 +63,9 @@ def get_user(username):
 
 def register_user(username, password):
     if get_user(username):
-        print("[DB] register_user error: username already exists.")
+        print("[DB] register_user: username already exists.")
         return False
     return insert_user(username, password)
-
-# ---------- AUTHENTICATION HELPERS ----------
 
 def authenticate_user(username, password):
     user = get_user(username)
@@ -73,6 +79,7 @@ def save_login_state(user_data):
     try:
         with open(SESSION_FILE, "w") as f:
             json.dump(user_data, f)
+        print("[DB] Login session saved.")
     except Exception as e:
         print(f"[DB] save_login_state error: {e}")
 
@@ -82,12 +89,14 @@ def load_login_state():
     try:
         with open(SESSION_FILE, "r") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        print(f"[DB] load_login_state error: {e}")
         return None
 
 def clear_login_state():
     if os.path.exists(SESSION_FILE):
         os.remove(SESSION_FILE)
+        print("[DB] Login session cleared.")
 
 # ---------- TASK OPERATIONS ----------
 
@@ -98,6 +107,7 @@ def add_task(user_id, username, title, start_date, due_date):
                 INSERT INTO tasks (user_id, username, title, start_date, due_date)
                 VALUES (?, ?, ?, ?, ?)
             """, (user_id, username, title, start_date, due_date))
+        print(f"[DB] Task added for {username}: {title}")
         return True
     except Exception as e:
         print(f"[DB] add_task error: {e}")
@@ -106,8 +116,24 @@ def add_task(user_id, username, title, start_date, due_date):
 def get_tasks(username):
     with connect() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT title, start_date, due_date FROM tasks WHERE username = ?", (username,))
+        cur.execute(
+            "SELECT title, start_date, due_date FROM tasks WHERE username = ? ORDER BY id DESC",
+            (username,)
+        )
         return cur.fetchall()
+
+def delete_task(username, title):
+    try:
+        with connect() as conn:
+            conn.execute(
+                "DELETE FROM tasks WHERE username = ? AND title = ?",
+                (username, title)
+            )
+        print(f"[DB] Task '{title}' deleted for {username}.")
+        return True
+    except Exception as e:
+        print(f"[DB] delete_task error: {e}")
+        return False
 
 # ---------- INIT ----------
 

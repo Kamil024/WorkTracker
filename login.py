@@ -37,7 +37,9 @@ class LoginWindow(ttk.Frame):
         self.create_styles()
         self.build_ui()
 
+        # Responsive + Enter key binding
         self.master.bind("<Configure>", self.on_resize)
+        self.master.bind("<Return>", lambda event: self.handle_auth())
 
     # ---------------------- STYLES ----------------------
     def create_styles(self):
@@ -130,6 +132,9 @@ class LoginWindow(ttk.Frame):
         ttk.Label(self.fields_frame, text="Password").grid(row=4, column=0, sticky=W)
         self.password_entry = ttk.Entry(self.fields_frame, textvariable=self.password_var, width=36, show="•", style="Custom.TEntry")
         self.password_entry.grid(row=5, column=0, pady=(4, 18))
+
+        # Focus cursor in username field by default
+        self.username_entry.focus_set()
 
         btn_text = "Sign Up" if self.is_signup else "Sign In"
         self.sign_in_btn = ttk.Button(self.fields_frame, text=btn_text, bootstyle="PRIMARY", width=26, command=self.handle_auth)

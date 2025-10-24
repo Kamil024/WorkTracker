@@ -1,39 +1,35 @@
 import db
-import json
-import os
 
-LOGIN_STATE_FILE = "login_state.json"
+# ---------- AUTHENTICATION ----------
 
 def authenticate_user(username, password):
-    """Return username if credentials match, else None."""
-    user = db.authenticate_user(username, password)  # returns username or None
-    return user
+    """Authenticate a user by verifying credentials."""
+    return db.authenticate_user(username, password)
+
 
 def register_user(username, password):
     """Register a new user if username not taken."""
     return db.register_user(username, password)
 
-def save_login_state(username):
-    """Save current logged-in username to file for auto-login."""
-    with open(LOGIN_STATE_FILE, "w") as f:
-        json.dump({"username": username}, f)
+
+# ---------- SESSION MANAGEMENT ----------
+
+def save_login_state(user_data):
+    """Save current logged-in user's info (id, username)."""
+    if user_data:
+        db.save_login_state(user_data)
+
 
 def load_login_state():
-    """Return saved username if login state exists."""
-    if os.path.exists(LOGIN_STATE_FILE):
-        try:
-            with open(LOGIN_STATE_FILE, "r") as f:
-                data = json.load(f)
-                return data.get("username")
-        except Exception:
-            return None
-    return None
+    """Load saved login session."""
+    return db.load_login_state()
+
 
 def logout():
-    """Clear saved login state and return True if successful."""
+    """Log out current user and clear saved session."""
     try:
-        if os.path.exists(LOGIN_STATE_FILE):
-            os.remove(LOGIN_STATE_FILE)
+        db.clear_login_state()
         return True
-    except Exception:
+    except Exception as e:
+        print(f"[AUTH] logout error: {e}")
         return False

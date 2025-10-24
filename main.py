@@ -4,7 +4,6 @@ from auth import load_login_state
 from dashboard import open_dashboard
 from login import LoginWindow
 
-
 def main():
     """Main entry point of the Work Tracker app."""
     initialize_database()
@@ -14,6 +13,7 @@ def main():
     app.geometry("1000x600")
     app.minsize(900, 550)
 
+    # Check saved session
     saved_user = load_login_state()
     if saved_user:
         open_dashboard(saved_user, app)
@@ -22,10 +22,5 @@ def main():
 
     app.mainloop()
 
-
-
 if __name__ == "__main__":
     main()
-
-
-#TEST TEXT JUST  BECAUSE
