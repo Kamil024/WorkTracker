@@ -18,3 +18,4 @@ def load_theme_preference():
             settings = json.load(f)
             return settings.get("theme", "light")
     return "light"
+

@@ -30,6 +30,7 @@ def create_task_table():
                 title TEXT,
                 start_date TEXT,
                 due_date TEXT,
+                status TEXT DEFAULT 'In Progress',
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
@@ -37,6 +38,15 @@ def create_task_table():
 def migrate_schema_if_needed():
     create_user_table()
     create_task_table()
+
+    # Check if "status" column exists; if not, add it.
+    with connect() as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(tasks)")
+        columns = [col[1] for col in cur.fetchall()]
+        if "status" not in columns:
+            conn.execute("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'In Progress'")
+            print("[DB] Migrated: Added 'status' column to tasks table.")
 
 # ---------- USER OPERATIONS ----------
 
@@ -100,13 +110,13 @@ def clear_login_state():
 
 # ---------- TASK OPERATIONS ----------
 
-def add_task(user_id, username, title, start_date, due_date):
+def add_task(user_id, username, title, start_date, due_date, status="In Progress"):
     try:
         with connect() as conn:
             conn.execute("""
-                INSERT INTO tasks (user_id, username, title, start_date, due_date)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, username, title, start_date, due_date))
+                INSERT INTO tasks (user_id, username, title, start_date, due_date, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, username, title, start_date, due_date, status))
         print(f"[DB] Task added for {username}: {title}")
         return True
     except Exception as e:
@@ -117,7 +127,7 @@ def get_tasks(username):
     with connect() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT title, start_date, due_date FROM tasks WHERE username = ? ORDER BY id DESC",
+            "SELECT title, start_date, due_date, status FROM tasks WHERE username = ? ORDER BY id DESC",
             (username,)
         )
         return cur.fetchall()

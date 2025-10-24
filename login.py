@@ -235,3 +235,4 @@ class LoginWindow(ttk.Frame):
                 open_dashboard(user, self.master)
             else:
                 messagebox.showerror("Error", "Invalid username or password.")
+
