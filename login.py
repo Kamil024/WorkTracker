@@ -37,9 +37,11 @@ class LoginWindow(ttk.Frame):
         self.create_styles()
         self.build_ui()
 
-        # Responsive + Enter key binding
+        # Responsive behavior only
         self.master.bind("<Configure>", self.on_resize)
-        self.master.bind("<Return>", lambda event: self.handle_auth())
+
+        # Bind Enter key only for login mode
+        self.bind_enter_key()
 
     # ---------------------- STYLES ----------------------
     def create_styles(self):
@@ -192,10 +194,18 @@ class LoginWindow(ttk.Frame):
         if self.is_signup:
             self.title_label.configure(text="Join WorkTracker 🚀")
             self.subtitle_label.configure(text="Create your account below")
+            # Unbind Enter during signup
+            self.master.unbind("<Return>")
         else:
             self.title_label.configure(text="Welcome Back 👋")
             self.subtitle_label.configure(text="Sign in to continue to WorkTracker")
+            # Rebind Enter during login
+            self.bind_enter_key()
         self.build_login_fields()
+
+    def bind_enter_key(self):
+        """Bind Enter key only for login mode."""
+        self.master.bind("<Return>", lambda event: self.handle_auth())
 
     def handle_auth(self):
         username = self.username_var.get().strip()
@@ -216,6 +226,9 @@ class LoginWindow(ttk.Frame):
         else:
             user = auth.authenticate_user(username, password)
             if user:
+                # 🔹 Disable Enter key after login success
+                self.master.unbind("<Return>")
+
                 # Clear login UI
                 for widget in self.master.winfo_children():
                     widget.destroy()
