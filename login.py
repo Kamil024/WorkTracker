@@ -1,6 +1,7 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter import messagebox, Canvas, font as tkFont, W, X
+import tkinter as tk
 import auth
 from dashboard import open_dashboard
 
@@ -9,9 +10,10 @@ class LoginWindow(ttk.Frame):
         super().__init__(master)
         self.master = master
 
-        self.username_var = ttk.StringVar()
-        self.password_var = ttk.StringVar()
-        self.name_var = ttk.StringVar()
+        # Use tk.StringVar (not ttk.StringVar)
+        self.username_var = tk.StringVar()
+        self.password_var = tk.StringVar()
+        self.name_var = tk.StringVar()
         self.is_signup = False
 
         self.master.columnconfigure(0, weight=1)
@@ -226,6 +228,9 @@ class LoginWindow(ttk.Frame):
         else:
             user = auth.authenticate_user(username, password)
             if user:
+                # Save session
+                auth.save_login_state(user)
+
                 # 🔹 Disable Enter key after login success
                 self.master.unbind("<Return>")
 
@@ -235,4 +240,3 @@ class LoginWindow(ttk.Frame):
                 open_dashboard(user, self.master)
             else:
                 messagebox.showerror("Error", "Invalid username or password.")
-

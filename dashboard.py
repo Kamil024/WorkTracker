@@ -11,6 +11,8 @@ import time
 
 import db
 import auth
+import tasks
+import analytics
 
 # ---------- GLOBAL TIMER STATE ----------
 TIMER_STATE = {
@@ -37,7 +39,7 @@ def open_dashboard(user, root):
     root.minsize(1000, 600)
     root.unbind("<Return>")
 
-    TIMER_STATE["root"] = root  # keep reference for persistent timer updates
+    TIMER_STATE["root"] = root
 
     container = ttk.Frame(root)
     container.pack(fill="both", expand=True)
@@ -68,21 +70,6 @@ def open_dashboard(user, root):
     sidebar.config(width=sidebar_width.get())
     sidebar.pack_propagate(False)
 
-    def toggle_sidebar():
-        if sidebar_width.get() > 60:
-            sidebar_width.set(60)
-            for child in sidebar.winfo_children():
-                if isinstance(child, ttk.Button) and hasattr(child, "text_label"):
-                    child.text_label.pack_forget()
-        else:
-            sidebar_width.set(220)
-            for child in sidebar.winfo_children():
-                if isinstance(child, ttk.Button) and hasattr(child, "text_label"):
-                    child.text_label.pack(side="left", padx=(10, 0))
-        sidebar.config(width=sidebar_width.get())
-
-    ttk.Button(sidebar, text="☰", command=toggle_sidebar).pack(anchor="w", pady=(0, 12))
-
     def nav_btn(icon, text, cmd):
         btn = ttk.Button(sidebar, command=cmd)
         btn.pack(fill="x", pady=6, ipady=6)
@@ -99,10 +86,9 @@ def open_dashboard(user, root):
     nav_btn("📊", "Analytics", lambda: show_analytic(username, content))
     nav_btn("⚙️", "Settings", lambda: show_settings(username, content))
 
-    # --- Timer at Bottom of Sidebar ---
+    # --- Timer ---
     timer_frame = ttk.Frame(sidebar, padding=(10, 15))
     timer_frame.pack(side="bottom", fill="x", pady=(20, 10))
-
     ttk.Label(timer_frame, text="⏱ Focus Timer", font=("Segoe UI", 11, "bold")).pack()
     timer_label = ttk.Label(timer_frame, text="00:00:00", font=("Consolas", 18, "bold"))
     timer_label.pack(pady=5)
@@ -122,7 +108,6 @@ def open_dashboard(user, root):
     content.columnconfigure(0, weight=1)
     content.rowconfigure(2, weight=1)
 
-    # Default view
     show_welcome(user_id, username, content)
 
 
@@ -148,11 +133,11 @@ def show_welcome(user_id, username, frame):
     ttk.Label(frame, text="Your productivity overview for today.", font=("Segoe UI", 10),
               foreground="#6c757d").pack(anchor="w", pady=(4, 10))
 
-    tasks = db.get_tasks(username)
+    tasks_rows = tasks.get_tasks_rows(username)
     completed = in_progress = overdue = 0
 
-    if tasks:
-        for t in tasks:
+    if tasks_rows:
+        for t in tasks_rows:
             status = str(t[3]).strip().lower() if len(t) > 3 else ""
             if status == "completed":
                 completed += 1
@@ -171,10 +156,10 @@ def show_welcome(user_id, username, frame):
     card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱")
 
     ttk.Label(frame, text="Recent Tasks", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(16, 6))
-    if not tasks:
+    if not tasks_rows:
         ttk.Label(frame, text="No recent tasks. Start one now!", foreground="#888").pack(anchor="w")
     else:
-        for t in tasks[:5]:
+        for t in tasks_rows[:5]:
             title = t[0]
             due = t[2] if len(t) > 2 else "N/A"
             ttk.Label(frame, text=f"• {title} (Due: {due})", font=("Segoe UI", 10)).pack(anchor="w")
@@ -187,7 +172,7 @@ def show_tasks(user_id, username, frame):
     ttk.Button(frame, text="➕ Add Task",
                command=lambda: open_add_task_modal(user_id, username, frame)).pack(anchor="e", pady=(0, 8))
 
-    rows = db.get_tasks(username)
+    rows = tasks.get_tasks_rows(username)
     columns = ["Title", "Start Date", "Due Date", "Status"]
     table = Tableview(master=frame, coldata=columns, rowdata=rows, paginated=False, searchable=True)
     table.pack(fill="both", expand=True, pady=(5, 0))
@@ -204,7 +189,6 @@ def refresh_timer_label():
 
 
 def update_timer():
-    """Continuously updates the timer even when switching tabs."""
     if TIMER_STATE["running"]:
         current_time = time.time()
         elapsed = current_time - TIMER_STATE.get("start_time", current_time)
@@ -228,9 +212,22 @@ def pause_timer():
         TIMER_STATE["running"] = False
         TIMER_STATE["base_seconds"] = TIMER_STATE.get("seconds", 0)
         TIMER_STATE["start_time"] = None
+    if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):
+        try:
+            TIMER_STATE["root"].after_cancel(TIMER_STATE["after_id"])
+        except Exception:
+            pass
+        TIMER_STATE["after_id"] = None
 
 
 def reset_timer():
+    if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):
+        try:
+            TIMER_STATE["root"].after_cancel(TIMER_STATE["after_id"])
+        except Exception:
+            pass
+        TIMER_STATE["after_id"] = None
+
     TIMER_STATE["running"] = False
     TIMER_STATE["seconds"] = 0
     TIMER_STATE["base_seconds"] = 0
@@ -272,7 +269,7 @@ def open_add_task_modal(user_id, username, parent_frame):
             Messagebox.show_error("Please enter a task title.")
             return
 
-        success = db.add_task(user_id, username, title, start, due, status)
+        success = tasks.add_new_task(user_id, username, title, start, due, status)
         if success:
             Messagebox.show_info("Task added successfully!")
             modal.destroy()
@@ -290,48 +287,42 @@ def show_analytic(username, frame):
     ttk.Label(frame, text=f"Comprehensive productivity insights for {username}.",
               font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", pady=(0, 15))
 
-    tasks = db.get_tasks(username)
-    if not tasks:
+    # Removed: Open Full Analytics Dashboard button
+
+    rows = tasks.get_tasks_rows(username)
+    if not rows:
         ttk.Label(frame, text="No tasks found to analyze.", foreground="#888").pack(anchor="w", pady=10)
         return
 
-    df = pd.DataFrame(tasks, columns=["Title", "Start", "Due", "Status"])
-    df["Start"] = pd.to_datetime(df["Start"], errors="coerce")
-    df["Due"] = pd.to_datetime(df["Due"], errors="coerce")
-    df["Month"] = df["Start"].dt.strftime("%b %Y")
-
-    total = len(df)
-    completed = len(df[df["Status"].str.lower() == "completed"])
-    in_progress = len(df[df["Status"].str.lower() == "in progress"])
-    overdue = len(df[df["Status"].str.lower() == "overdue"])
+    df = analytics.build_tasks_dataframe(rows)
+    stats = analytics.compute_stats(df)
 
     stats_frame = ttk.Frame(frame)
     stats_frame.pack(fill="x", pady=8)
-    card(stats_frame, "Total Tasks", total, "📋")
-    card(stats_frame, "Completed", completed, "✅")
-    card(stats_frame, "In Progress", in_progress, "🔁")
-    card(stats_frame, "Overdue", overdue, "⚠️")
+    card(stats_frame, "Total Tasks", stats["total"], "📋")
+    card(stats_frame, "Completed", stats["completed"], "✅")
+    card(stats_frame, "In Progress", stats["in_progress"], "🔁")
+    card(stats_frame, "Overdue", stats["overdue"], "⚠️")
 
-    monthly_counts = df["Month"].value_counts().sort_index()
+    monthly_counts = stats["monthly_counts"]
 
     fig = Figure(figsize=(10, 4), dpi=100)
     ax1 = fig.add_subplot(131)
     ax2 = fig.add_subplot(132)
     ax3 = fig.add_subplot(133)
 
-    ax1.bar(monthly_counts.index, monthly_counts.values, color="#1976d2")
+    ax1.bar(monthly_counts.index.astype(str), monthly_counts.values)
     ax1.set_title("Tasks per Month", fontsize=9)
     ax1.tick_params(axis="x", rotation=45)
 
     labels = ["Completed", "In Progress", "Overdue"]
-    values = [completed, in_progress, overdue]
-    colors = ["#4caf50", "#ffb300", "#e53935"]
-    ax2.pie(values, labels=labels, autopct="%1.1f%%", colors=colors, startangle=90)
+    values = [stats["completed"], stats["in_progress"], stats["overdue"]]
+    ax2.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
     ax2.set_title("Task Distribution", fontsize=9)
 
     if not df["Due"].isna().all():
         df_sorted = df.sort_values("Due")
-        ax3.plot(df_sorted["Due"], range(1, len(df_sorted) + 1), marker="o", color="#0288d1")
+        ax3.plot(df_sorted["Due"], range(1, len(df_sorted) + 1), marker="o")
         ax3.set_title("Task Timeline", fontsize=9)
         ax3.tick_params(axis="x", rotation=30)
     else:
@@ -353,6 +344,13 @@ def show_settings(username, frame):
 
 # ---------- Logout ----------
 def logout_action(root):
+    if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):
+        try:
+            TIMER_STATE["root"].after_cancel(TIMER_STATE["after_id"])
+        except Exception:
+            pass
+        TIMER_STATE["after_id"] = None
+
     if auth.logout():
         Messagebox.show_info("Logged out successfully.")
         root.destroy()

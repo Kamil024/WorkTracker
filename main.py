@@ -18,9 +18,11 @@ def main():
     if saved_user:
         open_dashboard(saved_user, app)
     else:
+        # Create the login UI. LoginWindow operates directly on the root window.
         LoginWindow(app)
 
     app.mainloop()
 
 if __name__ == "__main__":
     main()
+

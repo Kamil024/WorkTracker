@@ -8,7 +8,9 @@ SESSION_FILE = "session.json"
 # ---------- DATABASE CONNECTION ----------
 
 def connect():
-    return sqlite3.connect(DB_NAME)
+    # enable row factory if needed later
+    conn = sqlite3.connect(DB_NAME, timeout=5)
+    return conn
 
 def create_user_table():
     with connect() as conn:
@@ -39,14 +41,17 @@ def migrate_schema_if_needed():
     create_user_table()
     create_task_table()
 
-    # Check if "status" column exists; if not, add it.
+    # Ensure "status" column exists (for older DBs)
     with connect() as conn:
         cur = conn.cursor()
         cur.execute("PRAGMA table_info(tasks)")
         columns = [col[1] for col in cur.fetchall()]
         if "status" not in columns:
-            conn.execute("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'In Progress'")
-            print("[DB] Migrated: Added 'status' column to tasks table.")
+            try:
+                conn.execute("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'In Progress'")
+                print("[DB] Migrated: Added 'status' column to tasks table.")
+            except Exception as e:
+                print(f"[DB] migrate_schema_if_needed error: {e}")
 
 # ---------- USER OPERATIONS ----------
 
@@ -79,7 +84,8 @@ def register_user(username, password):
 
 def authenticate_user(username, password):
     user = get_user(username)
-    if user and user[2] == password:
+    # user row: (id, username, password)
+    if user and len(user) >= 3 and user[2] == password:
         return {"id": user[0], "username": user[1]}
     return None
 
@@ -98,15 +104,21 @@ def load_login_state():
         return None
     try:
         with open(SESSION_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            # Basic validation of structure
+            if isinstance(data, dict) and "id" in data and "username" in data:
+                return data
     except Exception as e:
         print(f"[DB] load_login_state error: {e}")
-        return None
+    return None
 
 def clear_login_state():
     if os.path.exists(SESSION_FILE):
-        os.remove(SESSION_FILE)
-        print("[DB] Login session cleared.")
+        try:
+            os.remove(SESSION_FILE)
+            print("[DB] Login session cleared.")
+        except Exception as e:
+            print(f"[DB] clear_login_state error: {e}")
 
 # ---------- TASK OPERATIONS ----------
 
@@ -124,13 +136,17 @@ def add_task(user_id, username, title, start_date, due_date, status="In Progress
         return False
 
 def get_tasks(username):
-    with connect() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT title, start_date, due_date, status FROM tasks WHERE username = ? ORDER BY id DESC",
-            (username,)
-        )
-        return cur.fetchall()
+    try:
+        with connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT title, start_date, due_date, status FROM tasks WHERE username = ? ORDER BY id DESC",
+                (username,)
+            )
+            return cur.fetchall()
+    except Exception as e:
+        print(f"[DB] get_tasks error: {e}")
+        return []
 
 def delete_task(username, title):
     try:
