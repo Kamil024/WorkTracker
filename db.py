@@ -8,7 +8,6 @@ SESSION_FILE = "session.json"
 # ---------- DATABASE CONNECTION ----------
 
 def connect():
-    # enable row factory if needed later
     conn = sqlite3.connect(DB_NAME, timeout=5)
     return conn
 
@@ -23,6 +22,7 @@ def create_user_table():
         """)
 
 def create_task_table():
+    # create tasks table with extended fields (idempotent)
     with connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
@@ -33,6 +33,10 @@ def create_task_table():
                 start_date TEXT,
                 due_date TEXT,
                 status TEXT DEFAULT 'In Progress',
+                description TEXT,
+                priority TEXT DEFAULT 'Medium',
+                category TEXT,
+                estimated_minutes INTEGER DEFAULT 0,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
@@ -41,17 +45,27 @@ def migrate_schema_if_needed():
     create_user_table()
     create_task_table()
 
-    # Ensure "status" column exists (for older DBs)
+    # Ensure older DBs get the new columns
     with connect() as conn:
         cur = conn.cursor()
         cur.execute("PRAGMA table_info(tasks)")
         columns = [col[1] for col in cur.fetchall()]
-        if "status" not in columns:
-            try:
-                conn.execute("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'In Progress'")
-                print("[DB] Migrated: Added 'status' column to tasks table.")
-            except Exception as e:
-                print(f"[DB] migrate_schema_if_needed error: {e}")
+
+        extra_columns = [
+            ("status", "TEXT DEFAULT 'In Progress'"),
+            ("description", "TEXT"),
+            ("priority", "TEXT DEFAULT 'Medium'"),
+            ("category", "TEXT"),
+            ("estimated_minutes", "INTEGER DEFAULT 0"),
+        ]
+
+        for col_name, col_def in extra_columns:
+            if col_name not in columns:
+                try:
+                    conn.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_def}")
+                    print(f"[DB] Migrated: Added '{col_name}' column to tasks table.")
+                except Exception as e:
+                    print(f"[DB] migrate_schema_if_needed error adding {col_name}: {e}")
 
 # ---------- USER OPERATIONS ----------
 
@@ -122,13 +136,23 @@ def clear_login_state():
 
 # ---------- TASK OPERATIONS ----------
 
-def add_task(user_id, username, title, start_date, due_date, status="In Progress"):
+def add_task(user_id, username, title, start_date, due_date, status="In Progress",
+             description=None, priority="Medium", category=None, estimated_minutes=0):
+    """
+    Adds a task to the DB. New fields:
+      - description (TEXT)
+      - priority (TEXT)
+      - category (TEXT)
+      - estimated_minutes (INTEGER)
+    """
     try:
         with connect() as conn:
             conn.execute("""
-                INSERT INTO tasks (user_id, username, title, start_date, due_date, status)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user_id, username, title, start_date, due_date, status))
+                INSERT INTO tasks (user_id, username, title, start_date, due_date, status,
+                                   description, priority, category, estimated_minutes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, username, title, start_date, due_date, status,
+                  description, priority, category, estimated_minutes))
         print(f"[DB] Task added for {username}: {title}")
         return True
     except Exception as e:
@@ -136,6 +160,10 @@ def add_task(user_id, username, title, start_date, due_date, status="In Progress
         return False
 
 def get_tasks(username):
+    """
+    Return the standard rows used by the UI table:
+    (title, start_date, due_date, status)
+    """
     try:
         with connect() as conn:
             cur = conn.cursor()
@@ -146,6 +174,23 @@ def get_tasks(username):
             return cur.fetchall()
     except Exception as e:
         print(f"[DB] get_tasks error: {e}")
+        return []
+
+def get_tasks_full(username):
+    """
+    Return full task rows including extended fields:
+    (id, user_id, username, title, start_date, due_date, status, description, priority, category, estimated_minutes)
+    """
+    try:
+        with connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, user_id, username, title, start_date, due_date, status, description, priority, category, estimated_minutes FROM tasks WHERE username = ? ORDER BY id DESC",
+                (username,)
+            )
+            return cur.fetchall()
+    except Exception as e:
+        print(f"[DB] get_tasks_full error: {e}")
         return []
 
 def delete_task(username, title):

@@ -100,7 +100,8 @@ def open_analytics(username, root):
         ax = fig.add_subplot(111)
 
         status_counts = df["Status"].value_counts()
-        ax.bar(status_counts.index, status_counts.values, color=["#4CAF50", "#FFC107", "#F44336"])
+        # Do not hardcode colors in analytic module (but here it's minor visual)
+        ax.bar(status_counts.index, status_counts.values)
         ax.set_title("Task Distribution by Status", fontsize=10)
         ax.set_ylabel("Count")
 
@@ -114,13 +115,31 @@ def open_analytics(username, root):
 
 # ---------- Helper Functions ----------
 def build_tasks_dataframe(rows):
-    """Convert task rows to a clean pandas DataFrame."""
-    df = pd.DataFrame(rows, columns=["Title", "Start", "Due", "Status"])
+    """
+    Convert task rows to a clean pandas DataFrame.
+    Accepts either the older (title, start, due, status) rows or the full rows.
+    """
+    # Detect row shape
+    if not rows:
+        return pd.DataFrame(columns=["Title", "Start", "Due", "Status"])
+
+    first = rows[0]
+    # If rows are the UI-short rows
+    if len(first) == 4:
+        df = pd.DataFrame(rows, columns=["Title", "Start", "Due", "Status"])
+    else:
+        # Full row: (id, user_id, username, title, start_date, due_date, status, description, priority, category, estimated_minutes)
+        df = pd.DataFrame(rows, columns=["ID", "UserID", "Username", "Title", "Start", "Due", "Status", "Description", "Priority", "Category", "EstimatedMinutes"])
+        # Keep names consistent for rest of analytics
+        df = df.rename(columns={"Title": "Title", "Start": "Start", "Due": "Due", "Status": "Status"})
+
+    # convert dates
     for col in ["Start", "Due"]:
-        try:
-            df[col] = pd.to_datetime(df[col])
-        except Exception:
-            pass
+        if col in df.columns:
+            try:
+                df[col] = pd.to_datetime(df[col])
+            except Exception:
+                pass
     return df
 
 
@@ -128,9 +147,9 @@ def compute_stats(df):
     """Compute overall task statistics."""
     stats = {
         "total": len(df),
-        "completed": (df["Status"].str.lower() == "completed").sum(),
-        "in_progress": (df["Status"].str.lower() == "in progress").sum(),
-        "overdue": (df["Status"].str.lower() == "overdue").sum(),
-        "monthly_counts": df.groupby(df["Start"].dt.to_period("M")).size()
+        "completed": int(((df["Status"].astype(str).str.lower()) == "completed").sum()) if "Status" in df.columns else 0,
+        "in_progress": int(((df["Status"].astype(str).str.lower()) == "in progress").sum()) if "Status" in df.columns else 0,
+        "overdue": int(((df["Status"].astype(str).str.lower()) == "overdue").sum()) if "Status" in df.columns else 0,
+        "monthly_counts": (df.groupby(df["Start"].dt.to_period("M")).size() if ("Start" in df.columns and not df["Start"].isna().all()) else pd.Series([], dtype=int))
     }
     return stats

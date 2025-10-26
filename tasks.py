@@ -1,6 +1,6 @@
 """
-Small helper wrapper for task operations.
-Keeps DB calls in one place and returns nice structures for the UI.
+Wrapper around db task operations used by the UI.
+Keeps backward-compatible function signatures.
 """
 import db
 
@@ -11,11 +11,25 @@ def get_tasks_rows(username):
     """
     return db.get_tasks(username) or []
 
-def add_new_task(user_id, username, title, start_date, due_date, status="In Progress"):
-    # Basic validation can be extended
+def get_tasks_full_rows(username):
+    """
+    Return full rows with extended fields:
+    [(id, user_id, username, title, start_date, due_date, status, description, priority, category, estimated_minutes), ...]
+    """
+    return db.get_tasks_full(username) or []
+
+def add_new_task(user_id, username, title, start_date, due_date, status="In Progress",
+                 description=None, priority="Medium", category=None, estimated_minutes=0):
+    """
+    Adds a new task. Accepts both the older signature (without extra fields)
+    and the new one with description/priority/category/estimated_minutes.
+    """
     if not title:
         return False
-    return db.add_task(user_id, username, title, start_date, due_date, status)
+
+    # For compatibility: if the caller uses old signature, the extra args will be absent/None.
+    return db.add_task(user_id, username, title, start_date, due_date, status,
+                       description, priority, category, estimated_minutes)
 
 def delete_task_by_title(username, title):
     return db.delete_task(username, title)
