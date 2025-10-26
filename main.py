@@ -6,7 +6,7 @@ from auth import load_login_state
 from dashboard import open_dashboard
 from login import LoginWindow
 
-# ---------------- LOADING SCREEN ---------------- #
+#  LOADING SCREEN  #
 class LoadingScreen(ttk.Toplevel):
     def __init__(self, master, on_complete):
         super().__init__(master)
@@ -23,7 +23,7 @@ class LoadingScreen(ttk.Toplevel):
 
         ttk.Label(
             self.container,
-            text="WorkTracker Pro",
+            text="WorkTracker",
             font=("Segoe UI Black", 28),
             foreground="#4B6EF5"
         ).pack(pady=(10, 5))
@@ -58,7 +58,7 @@ class LoadingScreen(ttk.Toplevel):
         self.on_complete()  # Launch the main UI
 
 
-# ---------------- MAIN APP ---------------- #
+#  MAIN APP  #
 def main():
     initialize_database()
 

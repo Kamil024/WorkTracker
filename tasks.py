@@ -38,9 +38,9 @@ def add_new_task(user_id, username, title, start_date, due_date, status="In Prog
         return False
 
 
-# -------------------------
+
 # Deletion helpers
-# -------------------------
+
 def get_task_id_by_username_title(username, title, start_date=None):
     """
     Find the most relevant task id for the given username + title.
@@ -169,9 +169,9 @@ def auto_delete_overdue(days=30):
         return {"deleted": 0, "success": False, "error": str(e)}
 
 
-# -------------------------
+
 # Existing flexible updater (kept as-is)
-# -------------------------
+
 def update_task(*args, **kwargs):
     """
     Flexible update function to handle multiple caller patterns.
@@ -203,7 +203,7 @@ def update_task(*args, **kwargs):
         except Exception:
             estimated_minutes = 0
 
-        # ---------- Case A: explicit task_id path ----------
+        #  Case A: explicit task_id path 
         if len(args) >= 6:
             # try interpret args[0] as task_id and args[1] as username
             possible_id = args[0]
@@ -256,7 +256,7 @@ def update_task(*args, **kwargs):
                 # not an int -> fallthrough to dashboard-style matching
                 pass
 
-        # ---------- Case B: dashboard-style ----------
+        #  Case B: dashboard-style 
         # args: (user_id, username, title_old, new_title, new_start, new_due, new_status)
         if len(args) >= 7:
             user_id = args[0]

@@ -22,7 +22,7 @@ def open_analytics(username, root):
     ttk.Label(win, text="Analyze task completion trends, categories, and productivity insights.",
               font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", padx=20, pady=(0, 10))
 
-    # --- Filter frame ---
+    #  Filter frame 
     filter_frame = ttk.Frame(win)
     filter_frame.pack(fill="x", padx=20, pady=10)
 
@@ -37,7 +37,7 @@ def open_analytics(username, root):
     ttk.Button(filter_frame, text="Apply Filter", bootstyle="info-outline",
                command=lambda: load_data()).pack(side="left")
 
-    # --- Table frame ---
+    #  Table frame 
     table_frame = ttk.Frame(win)
     table_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
@@ -53,7 +53,7 @@ def open_analytics(username, root):
     )
     table.pack(fill="both", expand=True)
 
-    # --- Chart frame ---
+    #  Chart frame 
     chart_frame = ttk.Frame(win)
     chart_frame.pack(fill="x", padx=20, pady=(0, 15))
 
@@ -61,7 +61,7 @@ def open_analytics(username, root):
 
     def load_data():
         nonlocal chart_canvas
-        table.delete_rows()  # ✅ fixed: clear existing rows properly
+        table.delete_rows()  #  fixed: clear existing rows properly
 
         conn = db.connect()
         cursor = conn.cursor()
@@ -76,7 +76,7 @@ def open_analytics(username, root):
 
         df = pd.DataFrame(rows, columns=["Task Name", "Category", "Status", "Start", "Due"])
 
-        # ✅ Convert to datetime safely
+        # Convert to datetime safely
         for col in ["Start", "Due"]:
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
@@ -93,11 +93,11 @@ def open_analytics(username, root):
         if e_date is not None:
             df = df[df["Due"] <= e_date]
 
-        # ✅ Add filtered data to table
+        #  Add filtered data to table
         for row in df.values.tolist():
             table.insert_row(row)
 
-        # --- Chart section ---
+        #  Chart section 
         if chart_canvas:
             chart_canvas.get_tk_widget().destroy()
 
@@ -117,7 +117,7 @@ def open_analytics(username, root):
     load_data()
 
 
-# ---------- Helper Functions ----------
+#  Helper Functions 
 def build_tasks_dataframe(rows):
     """
     Convert task rows to a clean pandas DataFrame.
@@ -136,7 +136,7 @@ def build_tasks_dataframe(rows):
         ])
         df = df.rename(columns={"Title": "Title", "Start": "Start", "Due": "Due", "Status": "Status"})
 
-    # ✅ Convert date columns safely
+    # Convert date columns safely
     for col in ["Start", "Due"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -152,7 +152,7 @@ def compute_stats(df):
         "overdue": int((df["Status"].astype(str).str.lower() == "overdue").sum()) if "Status" in df.columns else 0
     }
 
-    # ✅ Compute monthly counts safely
+    # Compute monthly counts safely
     if "Start" in df.columns:
         try:
             df["Start"] = pd.to_datetime(df["Start"], errors="coerce")

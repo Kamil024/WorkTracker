@@ -17,10 +17,10 @@ import auth
 import tasks
 import analytics
 
-# ---------- DYNAMIC AVATAR PATH ----------
+#  DYNAMIC AVATAR PATH 
 AVATAR_DIR = os.path.join(os.path.dirname(__file__), "avatars")
 
-# ---------- GLOBAL TIMER STATE ----------
+#  GLOBAL TIMER STATE 
 TIMER_STATE = {
     "running": False,
     "seconds": 0.0,
@@ -45,7 +45,7 @@ AVATAR_UNLOCKS = [
 ]
 
 
-# ---------- Dashboard ----------
+#  Dashboard 
 def open_dashboard(user, root):
     username = user["username"]
     user_id = user["id"]
@@ -53,7 +53,7 @@ def open_dashboard(user, root):
     for w in root.winfo_children():
         w.destroy()
 
-    root.title(f"WorkTracker Pro — {username}")
+    root.title(f"WorkTracker — {username}")
     root.geometry("1600x820")
     root.minsize(1000, 600)
     root.unbind("<Return>")
@@ -68,7 +68,7 @@ def open_dashboard(user, root):
     # --- Topbar ---
     topbar = ttk.Frame(container, padding=(18, 10))
     topbar.grid(row=0, column=0, columnspan=2, sticky="ew")
-    ttk.Label(topbar, text="WorkTracker Pro", font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w")
+    ttk.Label(topbar, text="WorkTracker", font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w")
 
     right_area = ttk.Frame(topbar)
     right_area.grid(row=0, column=1, sticky="e")
@@ -87,13 +87,13 @@ def open_dashboard(user, root):
     ttk.Label(right_area, text=username[0].upper(), width=3, anchor="center",
               font=("Segoe UI", 11, "bold")).pack(side="left", padx=(6, 0))
 
-    # --- Layout ---
+    #  Layout 
     layout = ttk.Frame(container)
     layout.grid(row=1, column=0, columnspan=2, sticky="nsew")
     layout.columnconfigure(1, weight=1)
     layout.rowconfigure(0, weight=1)
 
-    # --- Sidebar ---
+    #  Sidebar 
     sidebar = ttk.Frame(layout, padding=(12, 18))
     sidebar.grid(row=0, column=0, sticky="nsw")
     sidebar.config(width=220)
@@ -109,7 +109,7 @@ def open_dashboard(user, root):
         btn.text_label.pack(side="left", padx=(10, 0))
         return btn
 
-    # --- Navigation Buttons ---
+    #  Navigation Buttons 
     nav_btn("🏠", "Overview", lambda: show_welcome(user_id, username, content))
     nav_btn("📝", "Tasks", lambda: show_tasks(user_id, username, content))
     nav_btn("📊", "Analytics", lambda: show_analytic(username, content))
@@ -145,7 +145,7 @@ def open_dashboard(user, root):
     show_welcome(user_id, username, content)
 
 
-# ---------- Helper Functions ----------
+#  Helper Functions 
 def clear_frame(f):
     for w in f.winfo_children():
         w.destroy()
@@ -175,7 +175,7 @@ def _load_avatar_thumbnail(filename, size=(64,64), greyscale=False):
     except Exception:
         return None
 
-# ---------- Add Task Modal (modern, compatible) ----------
+#  Add Task Modal (modern, compatible) 
 def open_add_task_modal(user_id, username, parent_frame):
     modal = tk.Toplevel()
     modal.title("Add New Task")
@@ -288,7 +288,7 @@ def open_add_task_modal(user_id, username, parent_frame):
     ttk.Button(btn_frame, text="Create Task", command=create_task, bootstyle="primary").grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
 
-# ---------- Delete Task Function ----------
+#  Delete Task Function 
 def delete_task_action(user_id, username, parent_frame):
     """Delete selected task with confirmation."""
     table = getattr(parent_frame, "table", None)
@@ -336,7 +336,7 @@ def delete_task_action(user_id, username, parent_frame):
         Messagebox.show_error("Failed to delete task. Please try again.")
 
 
-# ---------- Edit Task Modal (updated to handle extended fields when available) ----------
+#  Edit Task Modal (updated to handle extended fields when available) 
 def open_edit_task_modal(user_id, username, parent_frame):
     table = getattr(parent_frame, "table", None)
     if not table:
@@ -565,7 +565,7 @@ def open_edit_task_modal(user_id, username, parent_frame):
     ttk.Button(btn_frame, text="Cancel", command=lambda: modal.destroy(), bootstyle="secondary-outline").grid(row=0, column=0, sticky="ew", padx=(0, 6))
 
 
-# ---------- Tasks Page ----------
+#  Tasks Page 
 def show_tasks(user_id, username, frame):
     clear_frame(frame)
     ttk.Label(frame, text="Tasks", font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 12))
@@ -598,7 +598,7 @@ def show_tasks(user_id, username, frame):
     frame.table = table
 
 
-# ---------- Admin Panel ----------
+#  Admin Panel 
 def show_admin_panel(user_id, username, frame):
     """
     Admin-only panel: list users, show/set/add/subtract EXP for debugging, and delete any user's tasks.
@@ -894,7 +894,7 @@ def show_admin_panel(user_id, username, frame):
     refresh_admin_tasks()
 
 
-# ---------- Rewards Page ----------
+#  Rewards Page
 def show_rewards(user_id, username, frame):
     clear_frame(frame)
     ttk.Label(frame, text="Rewards", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 10))
@@ -953,7 +953,7 @@ def _equip_avatar(user_id, avatar_filename, parent_frame=None):
         Messagebox.show_error("Failed to equip avatar.")
 
 
-# ---------- Settings ----------
+#  Settings 
 def show_settings(user_id, username, frame):
     clear_frame(frame)
     ttk.Label(frame, text="Settings", font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 12))
@@ -1014,7 +1014,7 @@ def _on_equip_click(user_id, fname, frame):
         Messagebox.show_error("Failed to equip avatar.")
 
 
-# ---------- Analytics ----------
+#  Analytics 
 def show_analytic(username, frame):
     clear_frame(frame)
     ttk.Label(frame, text="Analytics", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 10))
@@ -1067,7 +1067,7 @@ def show_analytic(username, frame):
     canvas.get_tk_widget().pack(fill="both", expand=True)
 
 
-# ---------- Timer Logic ----------
+#  Timer Logic 
 def refresh_timer_label():
     if TIMER_STATE["label"]:
         sec = int(TIMER_STATE["seconds"])
@@ -1120,7 +1120,7 @@ def reset_timer():
     refresh_timer_label()
 
 
-# ---------- Overview ----------
+#  Overview 
 def show_welcome(user_id, username, frame):
     clear_frame(frame)
     ttk.Label(frame, text=f"Welcome back, {username}!", font=("Segoe UI", 20, "bold")).pack(anchor="w")
@@ -1150,7 +1150,7 @@ def show_welcome(user_id, username, frame):
     card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱")
 
 
-# ---------- Logout ----------
+#  Logout 
 def logout_action(root):
     # Stop timer if running
     if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):

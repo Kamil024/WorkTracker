@@ -5,7 +5,7 @@ import os
 DB_NAME = "worktracker.db"
 SESSION_FILE = "session.json"
 
-# ---------- DATABASE CONNECTION ----------
+#  DATABASE CONNECTION 
 
 def connect():
     conn = sqlite3.connect(DB_NAME, timeout=5)
@@ -81,7 +81,7 @@ def migrate_schema_if_needed():
                 except Exception as e:
                     print(f"[DB] migrate_schema_if_needed error adding {col_name}: {e}")
 
-# ---------- USER OPERATIONS ----------
+# USER OPERATIONS 
 
 def insert_user(username, password):
     try:
@@ -117,7 +117,7 @@ def authenticate_user(username, password):
         return {"id": user[0], "username": user[1]}
     return None
 
-# ---------- SESSION MANAGEMENT ----------
+#  SESSION MANAGEMENT 
 
 def save_login_state(user_data):
     try:
@@ -148,7 +148,7 @@ def clear_login_state():
         except Exception as e:
             print(f"[DB] clear_login_state error: {e}")
 
-# ---------- TASK OPERATIONS ----------
+#  TASK OPERATIONS 
 
 def add_task(user_id, username, title, start_date, due_date, status="In Progress",
              description=None, priority="Medium", category=None, estimated_minutes=0):
@@ -220,7 +220,7 @@ def delete_task(username, title):
         print(f"[DB] delete_task error: {e}")
         return False
 
-# ---------- REWARDS / EXP OPERATIONS ----------
+#  REWARDS / EXP OPERATIONS 
 
 def ensure_reward_entry(user_id):
     """
@@ -354,7 +354,7 @@ def set_exp(user_id, exp_value):
         print(f"[DB] set_exp error: {e}")
         return False
 
-# ---------- INIT ----------
+#  INIT 
 
 def initialize_database():
     migrate_schema_if_needed()

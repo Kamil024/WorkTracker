@@ -6,7 +6,7 @@ import auth
 from dashboard import open_dashboard
 
 
-# ---------------------- SPLASH SCREEN ----------------------
+#  SPLASH SCREEN 
 class SplashScreen(ttk.Frame):
     def __init__(self, master, on_finish):
         super().__init__(master)
@@ -30,7 +30,7 @@ class SplashScreen(ttk.Frame):
     def build_ui(self):
         ttk.Label(
             self.master,
-            text="WorkTracker Pro",
+            text="WorkTracker",
             font=("Segoe UI Black", 38),
             foreground="white",
             background="#4B6EF5"
@@ -66,7 +66,7 @@ class SplashScreen(ttk.Frame):
         self.on_finish(self.master)
 
 
-# ---------------------- LOGIN WINDOW ----------------------
+# LOGIN WINDOW 
 class LoginWindow(ttk.Frame):
     def __init__(self, master):
         super().__init__(master)
@@ -99,7 +99,7 @@ class LoginWindow(ttk.Frame):
         self.master.bind("<Configure>", self.on_resize)
         self.bind_enter_key()
 
-    # ---------------------- STYLES ----------------------
+    #  STYLES
     def create_styles(self):
         self.base_fonts = {
             "title": tkFont.Font(family="Segoe UI Semibold", size=28),
@@ -119,13 +119,13 @@ class LoginWindow(ttk.Frame):
         style.configure("Primary.TButton", font=self.base_fonts["button"], padding=8)
         style.configure("Card.TFrame", background="white", relief="flat")
 
-    # ---------------------- BUILD UI ----------------------
+    #  BUILD UI
     def build_ui(self):
         left = ttk.Frame(self.main_frame)
         left.grid(row=0, column=0, sticky="nsew", padx=(40, 20), pady=30)
         left.columnconfigure(0, weight=1)
 
-        self.brand_label = ttk.Label(left, text="WorkTracker Pro", font=("Segoe UI Black", 34), foreground="#4B6EF5")
+        self.brand_label = ttk.Label(left, text="WorkTracker", font=("Segoe UI Black", 34), foreground="#4B6EF5")
         self.brand_label.pack(pady=(20, 10))
 
         self.brand_sub = ttk.Label(
@@ -196,7 +196,7 @@ class LoginWindow(ttk.Frame):
         self.switch_button = ttk.Button(self.fields_frame, text=switch_text, bootstyle="SECONDARY", width=26, command=self.toggle_mode)
         self.switch_button.grid(row=7, column=0)
 
-    # ---------------------- OTHER ----------------------
+    # OTHER 
     def draw_gradient(self, w, h):
         self.gradient.delete("gradient")
         color_top = (80, 120, 250)
@@ -261,14 +261,14 @@ class LoginWindow(ttk.Frame):
                 messagebox.showerror("Error", "Invalid username or password.")
 
 
-# ---------------------- OPEN LOGIN WINDOW ----------------------
+#  OPEN LOGIN WINDOW 
 def open_login_window(root):
     for widget in root.winfo_children():
         widget.destroy()
     LoginWindow(root)
 
 
-# ---------------------- APP ENTRY POINT ----------------------
+#  APP ENTRY POINT 
 if __name__ == "__main__":
     root = ttk.Window(themename="superhero")
     SplashScreen(root, open_login_window)

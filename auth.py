@@ -1,6 +1,6 @@
 import db
 
-# ---------- AUTHENTICATION ----------
+#  AUTHENTICATION 
 
 def authenticate_user(username, password):
     """Authenticate a user by verifying credentials."""
@@ -12,7 +12,7 @@ def register_user(username, password):
     return db.register_user(username, password)
 
 
-# ---------- SESSION MANAGEMENT ----------
+#  SESSION MANAGEMENT 
 
 def save_login_state(user_data):
     """Save current logged-in user's info (id, username)."""
