@@ -288,6 +288,54 @@ def open_add_task_modal(user_id, username, parent_frame):
     ttk.Button(btn_frame, text="Create Task", command=create_task, bootstyle="primary").grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
 
+# ---------- Delete Task Function ----------
+def delete_task_action(user_id, username, parent_frame):
+    """Delete selected task with confirmation."""
+    table = getattr(parent_frame, "table", None)
+    if not table:
+        Messagebox.show_error("No table found.")
+        return
+
+    selected = table.view.selection()
+    if not selected:
+        Messagebox.show_error("Please select a task to delete.")
+        return
+
+    selected_item = table.view.item(selected[0])["values"]
+    if not selected_item:
+        Messagebox.show_error("Invalid task data.")
+        return
+
+    # Support both old 4-column rows and new 6-column rows
+    if len(selected_item) >= 6:
+        title = selected_item[0]
+        start_date = selected_item[3]
+    elif len(selected_item) >= 4:
+        title = selected_item[0]
+        start_date = selected_item[1]
+    else:
+        Messagebox.show_error("Invalid task data format.")
+        return
+
+    # Confirm deletion
+    confirm = Messagebox.okcancel(
+        f"Are you sure you want to delete the task:\n\n'{title}'?\n\nThis action cannot be undone.",
+        "Confirm Deletion"
+    )
+    
+    if not confirm:
+        return
+
+    # Perform deletion
+    success = tasks.safe_delete_task(username, title)
+    
+    if success:
+        Messagebox.show_info("Task deleted successfully!")
+        show_tasks(user_id, username, parent_frame)
+    else:
+        Messagebox.show_error("Failed to delete task. Please try again.")
+
+
 # ---------- Edit Task Modal (updated to handle extended fields when available) ----------
 def open_edit_task_modal(user_id, username, parent_frame):
     table = getattr(parent_frame, "table", None)
@@ -528,6 +576,9 @@ def show_tasks(user_id, username, frame):
                command=lambda: open_add_task_modal(user_id, username, frame)).pack(side="right", padx=(4, 0))
     ttk.Button(btn_frame, text="✏️ Edit Task",
                command=lambda: open_edit_task_modal(user_id, username, frame)).pack(side="right", padx=(0, 4))
+    ttk.Button(btn_frame, text="🗑️ Delete Task",
+               command=lambda: delete_task_action(user_id, username, frame),
+               bootstyle="danger-outline").pack(side="right", padx=(0, 4))
 
     # Try to get full rows (with category and estimated time)
     try:
@@ -550,18 +601,22 @@ def show_tasks(user_id, username, frame):
 # ---------- Admin Panel ----------
 def show_admin_panel(user_id, username, frame):
     """
-    Admin-only panel: list users, show/set/add/subtract EXP for debugging.
-    Admin is the user with username == 'admin' (password admin).
+    Admin-only panel: list users, show/set/add/subtract EXP for debugging, and delete any user's tasks.
     """
     clear_frame(frame)
     ttk.Label(frame, text="Admin Panel", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 10))
-    ttk.Label(frame, text="Manage user EXP (admin only).", font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", pady=(0, 8))
+    ttk.Label(frame, text="Manage user EXP and tasks (admin only).", font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", pady=(0, 8))
 
-    body = ttk.Frame(frame)
-    body.pack(fill="x", pady=(6, 0))
+    # Create tabbed interface
+    notebook = ttk.Notebook(frame)
+    notebook.pack(fill="both", expand=True, pady=(6, 0))
+
+    # Tab 1: EXP Management
+    exp_tab = ttk.Frame(notebook, padding=10)
+    notebook.add(exp_tab, text="EXP Management")
 
     # User list
-    ttk.Label(body, text="Select User").grid(row=0, column=0, sticky="w")
+    ttk.Label(exp_tab, text="Select User").grid(row=0, column=0, sticky="w", pady=(6, 2))
     users = []
     try:
         with db.connect() as conn:
@@ -571,15 +626,15 @@ def show_admin_panel(user_id, username, frame):
     except Exception as e:
         print(f"[Admin] error fetching users: {e}")
 
-    usernames = [u[1] for u in users] if users else []
+    usernames_list = [u[1] for u in users] if users else []
     user_var = tk.StringVar()
-    user_combo = ttk.Combobox(body, values=usernames, textvariable=user_var, state="readonly")
+    user_combo = ttk.Combobox(exp_tab, values=usernames_list, textvariable=user_var, state="readonly")
     user_combo.grid(row=1, column=0, sticky="ew", padx=(0, 12))
-    if usernames:
-        user_combo.set(usernames[0])
+    if usernames_list:
+        user_combo.set(usernames_list[0])
 
     # Display selected user's exp and level
-    info_frame = ttk.Frame(body)
+    info_frame = ttk.Frame(exp_tab)
     info_frame.grid(row=1, column=1, sticky="nsew", padx=(12, 0))
     info_frame.columnconfigure(0, weight=1)
 
@@ -594,7 +649,6 @@ def show_admin_panel(user_id, username, frame):
             exp_label.config(text="EXP: —")
             level_label.config(text="Level: —")
             return
-        # find user id
         uid = None
         for u in users:
             if u[1] == sel:
@@ -612,14 +666,15 @@ def show_admin_panel(user_id, username, frame):
     refresh_selected_user_info()
 
     # Amount entry
-    ttk.Label(body, text="Amount (EXP)").grid(row=2, column=0, sticky="w", pady=(12, 0))
+    ttk.Label(exp_tab, text="Amount (EXP)").grid(row=2, column=0, sticky="w", pady=(12, 0))
     amount_var = tk.StringVar()
-    amount_entry = ttk.Entry(body, textvariable=amount_var)
+    amount_entry = ttk.Entry(exp_tab, textvariable=amount_var)
     amount_entry.grid(row=3, column=0, sticky="ew")
 
     # Buttons: Add, Subtract, Set
-    btns = ttk.Frame(body)
+    btns = ttk.Frame(exp_tab)
     btns.grid(row=3, column=1, sticky="w", padx=(12, 0))
+    
     def admin_add_exp():
         sel = user_var.get()
         if not sel:
@@ -630,7 +685,6 @@ def show_admin_panel(user_id, username, frame):
         except Exception:
             Messagebox.show_error("Enter a valid integer amount.")
             return
-        # find uid
         uid = next((u[0] for u in users if u[1] == sel), None)
         if uid is None:
             Messagebox.show_error("User not found.")
@@ -656,7 +710,6 @@ def show_admin_panel(user_id, username, frame):
         if uid is None:
             Messagebox.show_error("User not found.")
             return
-        # add negative EXP
         res = db.add_exp(uid, -abs(amt))
         if res.get("success"):
             Messagebox.show_info(f"Subtracted {amt} EXP from {sel}. New EXP: {res.get('exp')}")
@@ -691,6 +744,154 @@ def show_admin_panel(user_id, username, frame):
     ttk.Button(btns, text="Add EXP", command=admin_add_exp, bootstyle="success-outline").pack(side="left", padx=(0,6))
     ttk.Button(btns, text="Subtract EXP", command=admin_subtract_exp, bootstyle="warning-outline").pack(side="left", padx=(0,6))
     ttk.Button(btns, text="Set EXP", command=admin_set_exp, bootstyle="secondary-outline").pack(side="left", padx=(0,6))
+
+    # Tab 2: Task Management
+    task_tab = ttk.Frame(notebook, padding=10)
+    notebook.add(task_tab, text="Task Management")
+
+    ttk.Label(task_tab, text="Manage Tasks for All Users", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 10))
+    
+    # User selection for task management
+    user_task_frame = ttk.Frame(task_tab)
+    user_task_frame.pack(fill="x", pady=(0, 10))
+    
+    ttk.Label(user_task_frame, text="Select User:").pack(side="left", padx=(0, 8))
+    task_user_var = tk.StringVar()
+    task_user_combo = ttk.Combobox(user_task_frame, values=usernames_list, textvariable=task_user_var, state="readonly", width=20)
+    task_user_combo.pack(side="left", padx=(0, 12))
+    if usernames_list:
+        task_user_combo.set(usernames_list[0])
+    
+    def refresh_admin_tasks():
+        selected_user = task_user_var.get()
+        if not selected_user:
+            return
+        
+        # Clear existing table
+        for widget in task_display_frame.winfo_children():
+            widget.destroy()
+        
+        # Get tasks for selected user
+        try:
+            rows_full = tasks.get_tasks_full_rows(selected_user)
+            if rows_full and len(rows_full[0]) >= 11:
+                rows = [[r[3], r[9], r[10], r[4], r[5], r[6]] for r in rows_full]
+                columns = ["Title", "Category", "Est. Time (min)", "Start Date", "Due Date", "Status"]
+            else:
+                rows = tasks.get_tasks_rows(selected_user)
+                columns = ["Title", "Start Date", "Due Date", "Status"]
+        except Exception:
+            rows = tasks.get_tasks_rows(selected_user)
+            columns = ["Title", "Start Date", "Due Date", "Status"]
+        
+        if not rows:
+            ttk.Label(task_display_frame, text=f"No tasks found for {selected_user}", foreground="#888").pack(pady=20)
+            return
+        
+        table = Tableview(master=task_display_frame, coldata=columns, rowdata=rows, paginated=False, searchable=True, height=15)
+        table.pack(fill="both", expand=True)
+        task_display_frame.table = table
+    
+    ttk.Button(user_task_frame, text="🔄 Refresh", command=refresh_admin_tasks).pack(side="left", padx=(0, 12))
+    
+    # Delete button for admin
+    def admin_delete_task():
+        selected_user = task_user_var.get()
+        if not selected_user:
+            Messagebox.show_error("Please select a user first.")
+            return
+        
+        table = getattr(task_display_frame, "table", None)
+        if not table:
+            Messagebox.show_error("No tasks loaded. Click Refresh first.")
+            return
+        
+        selected = table.view.selection()
+        if not selected:
+            Messagebox.show_error("Please select a task to delete.")
+            return
+        
+        selected_item = table.view.item(selected[0])["values"]
+        if not selected_item:
+            Messagebox.show_error("Invalid task data.")
+            return
+        
+        # Support both formats
+        if len(selected_item) >= 6:
+            title = selected_item[0]
+        elif len(selected_item) >= 4:
+            title = selected_item[0]
+        else:
+            Messagebox.show_error("Invalid task data format.")
+            return
+        
+        # Confirm deletion
+        confirm = Messagebox.okcancel(
+            f"Are you sure you want to delete '{title}' for user '{selected_user}'?\n\nThis action cannot be undone.",
+            "Admin: Confirm Deletion"
+        )
+        
+        if not confirm:
+            return
+        
+        # Perform deletion
+        success = tasks.safe_delete_task(selected_user, title)
+        
+        if success:
+            Messagebox.show_info(f"Task deleted successfully for {selected_user}!")
+            refresh_admin_tasks()
+        else:
+            Messagebox.show_error("Failed to delete task.")
+    
+    ttk.Button(user_task_frame, text="🗑️ Delete Selected Task", command=admin_delete_task, bootstyle="danger").pack(side="left")
+    
+    # Task display area
+    task_display_frame = ttk.Frame(task_tab)
+    task_display_frame.pack(fill="both", expand=True, pady=(10, 0))
+    
+    # Auto-cleanup section
+    ttk.Separator(task_tab, orient="horizontal").pack(fill="x", pady=(15, 10))
+    cleanup_frame = ttk.Frame(task_tab)
+    cleanup_frame.pack(fill="x", pady=(5, 0))
+    
+    ttk.Label(cleanup_frame, text="Auto-Cleanup:", font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 10))
+    ttk.Label(cleanup_frame, text="Delete overdue tasks older than:").pack(side="left", padx=(0, 6))
+    
+    days_var = tk.StringVar(value="30")
+    days_entry = ttk.Entry(cleanup_frame, textvariable=days_var, width=8)
+    days_entry.pack(side="left", padx=(0, 6))
+    ttk.Label(cleanup_frame, text="days").pack(side="left", padx=(0, 12))
+    
+    def run_auto_cleanup():
+        try:
+            days = int(days_var.get())
+            if days < 1:
+                Messagebox.show_error("Days must be at least 1.")
+                return
+        except Exception:
+            Messagebox.show_error("Enter a valid number of days.")
+            return
+        
+        confirm = Messagebox.okcancel(
+            f"This will permanently delete all overdue (non-completed) tasks older than {days} days.\n\nContinue?",
+            "Confirm Auto-Cleanup"
+        )
+        
+        if not confirm:
+            return
+        
+        result = tasks.auto_delete_overdue(days)
+        if result.get("success"):
+            deleted_count = result.get("deleted", 0)
+            Messagebox.show_info(f"Auto-cleanup complete!\n\nDeleted {deleted_count} overdue task(s).")
+            refresh_admin_tasks()
+        else:
+            Messagebox.show_error(f"Auto-cleanup failed: {result.get('error', 'Unknown error')}")
+    
+    ttk.Button(cleanup_frame, text="🧹 Run Cleanup", command=run_auto_cleanup, bootstyle="warning").pack(side="left")
+    
+    # Initial load
+    refresh_admin_tasks()
 
 
 # ---------- Rewards Page ----------
@@ -742,13 +943,8 @@ def _equip_avatar(user_id, avatar_filename, parent_frame=None):
     ok = db.set_avatar(user_id, avatar_filename)
     if ok:
         Messagebox.show_info(f"Equipped {avatar_filename}")
-        # refresh UI where needed
         if parent_frame:
-            # if parent_frame is the main content, refresh rewards page
-            # find username from session if possible (not required)
             try:
-                # if parent_frame was used in show_rewards, refresh it by calling that function again
-                # But we don't have username here. Easiest is to simply refresh the frame's children.
                 for w in parent_frame.winfo_children():
                     w.destroy()
             except Exception:
@@ -802,9 +998,6 @@ def _on_equip_click(user_id, fname, frame):
     ok = db.set_avatar(user_id, fname)
     if ok:
         Messagebox.show_info("Avatar equipped.")
-        # Refresh settings UI to show new equipped label
-        # we need username for show_settings signature; we can extract username from users table
-        # but simpler: re-open settings: find username via users table by id
         try:
             with db.connect() as conn:
                 cur = conn.cursor()
@@ -816,7 +1009,6 @@ def _on_equip_click(user_id, fname, frame):
                     return
         except Exception:
             pass
-        # fallback: just clear then re-render minimal
         show_settings(user_id, "", frame)
     else:
         Messagebox.show_error("Failed to equip avatar.")
@@ -987,7 +1179,7 @@ def logout_action(root):
             widget.destroy()
 
         # Reset window size and title for login
-        root.geometry("1000x600")  # 👈 Restore to original login window size
+        root.geometry("1000x600")
         root.minsize(400, 400)
         root.title("Work Tracker — Login")
 

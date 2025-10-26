@@ -1,8 +1,11 @@
 """
 Wrapper around db task operations used by the UI.
 Keeps backward-compatible function signatures.
+Adds safe delete and auto-cleanup helpers.
 """
 import db
+import datetime
+import sqlite3
 
 def get_tasks_rows(username):
     """
@@ -35,10 +38,140 @@ def add_new_task(user_id, username, title, start_date, due_date, status="In Prog
         return False
 
 
+# -------------------------
+# Deletion helpers
+# -------------------------
+def get_task_id_by_username_title(username, title, start_date=None):
+    """
+    Find the most relevant task id for the given username + title.
+    If start_date is provided, prefer exact match on start_date.
+    Returns task id int or None.
+    """
+    try:
+        with db.connect() as conn:
+            cur = conn.cursor()
+            if start_date:
+                cur.execute("""
+                    SELECT id FROM tasks
+                    WHERE username = ? AND title = ? AND start_date = ?
+                    ORDER BY id DESC LIMIT 1
+                """, (username, title, start_date))
+                r = cur.fetchone()
+                if r:
+                    return r[0]
+            # fallback: match by username + title only
+            cur.execute("""
+                SELECT id FROM tasks
+                WHERE username = ? AND title = ?
+                ORDER BY id DESC LIMIT 1
+            """, (username, title))
+            r = cur.fetchone()
+            if r:
+                return r[0]
+    except Exception as e:
+        print(f"[tasks.py] get_task_id_by_username_title error: {e}")
+    return None
+
 def delete_task_by_title(username, title):
-    return db.delete_task(username, title)
+    """
+    Backwards-compatible delete by username+title.
+    Returns True on success, False otherwise.
+    """
+    try:
+        # if db exposes delete_task, use it first (backwards compatibility)
+        try:
+            res = db.delete_task(username, title)
+            # Some older db.delete_task may return None/True/False or dict.
+            if isinstance(res, dict):
+                return res.get("success", False)
+            if isinstance(res, bool):
+                return res
+            # if it returned something else, fallthrough to SQL delete
+        except AttributeError:
+            # db.delete_task not present
+            pass
+
+        tid = get_task_id_by_username_title(username, title)
+        if tid is None:
+            print(f"[tasks.py] delete_task_by_title: no task found for user={username}, title={title}")
+            return False
+        return delete_task_by_id(tid, username=username)
+    except Exception as e:
+        print(f"[tasks.py] delete_task_by_title error: {e}")
+        return False
+
+def delete_task_by_id(task_id, username=None):
+    """
+    Delete a task by its id.
+    If username is provided, ensure the task belongs to that user.
+    Returns True on success, False otherwise.
+    """
+    try:
+        with db.connect() as conn:
+            cur = conn.cursor()
+            if username:
+                cur.execute("DELETE FROM tasks WHERE id = ? AND username = ?", (task_id, username))
+            else:
+                cur.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            conn.commit()
+            if cur.rowcount > 0:
+                print(f"[tasks.py] Deleted task id={task_id} (user={username})")
+                return True
+            else:
+                print(f"[tasks.py] delete_task_by_id: no rows deleted for id={task_id} (user={username})")
+                return False
+    except Exception as e:
+        print(f"[tasks.py] delete_task_by_id error: {e}")
+        return False
+
+def safe_delete_task(username, title):
+    """
+    Safe deletion wrapper used by UI code: finds the most relevant task for the user/title
+    and deletes it. Returns True/False.
+    This function does not prompt the user; the UI module should prompt before calling.
+    """
+    try:
+        tid = get_task_id_by_username_title(username, title)
+        if not tid:
+            print(f"[tasks.py] safe_delete_task: could not find task for user={username}, title={title}")
+            return False
+        return delete_task_by_id(tid, username=username)
+    except Exception as e:
+        print(f"[tasks.py] safe_delete_task error: {e}")
+        return False
+
+def auto_delete_overdue(days=30):
+    """
+    Auto-cleanup: delete tasks with due_date older than `days` (relative to today)
+    and not marked as Completed.
+    Returns a dict { "deleted": n, "success": True/False }.
+    NOTE: This is aggressive — call only from admin/maintenance code or with user confirmation.
+    """
+    try:
+        # compute cutoff date as YYYY-MM-DD
+        cutoff = (datetime.date.today() - datetime.timedelta(days=int(days))).isoformat()
+        with db.connect() as conn:
+            cur = conn.cursor()
+            # Only delete tasks that have a non-empty due_date and where due_date < cutoff
+            # and status is not 'Completed'
+            cur.execute("""
+                DELETE FROM tasks
+                WHERE due_date IS NOT NULL AND due_date != ''
+                  AND date(due_date) < date(?)
+                  AND (status IS NULL OR LOWER(status) != 'completed')
+            """, (cutoff,))
+            deleted = cur.rowcount
+            conn.commit()
+        print(f"[tasks.py] auto_delete_overdue: deleted {deleted} tasks older than {cutoff}")
+        return {"deleted": deleted, "success": True}
+    except Exception as e:
+        print(f"[tasks.py] auto_delete_overdue error: {e}")
+        return {"deleted": 0, "success": False, "error": str(e)}
 
 
+# -------------------------
+# Existing flexible updater (kept as-is)
+# -------------------------
 def update_task(*args, **kwargs):
     """
     Flexible update function to handle multiple caller patterns.
