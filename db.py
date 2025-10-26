@@ -41,11 +41,25 @@ def create_task_table():
             )
         """)
 
+def create_rewards_table():
+    # rewards table stores exp, level and equipped avatar per user
+    with connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rewards (
+                user_id INTEGER PRIMARY KEY,
+                exp INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 1,
+                avatar TEXT DEFAULT 'female_1.png',
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """)
+
 def migrate_schema_if_needed():
     create_user_table()
     create_task_table()
+    create_rewards_table()
 
-    # Ensure older DBs get the new columns
+    # Ensure older DBs get the new columns in tasks table
     with connect() as conn:
         cur = conn.cursor()
         cur.execute("PRAGMA table_info(tasks)")
@@ -204,6 +218,140 @@ def delete_task(username, title):
         return True
     except Exception as e:
         print(f"[DB] delete_task error: {e}")
+        return False
+
+# ---------- REWARDS / EXP OPERATIONS ----------
+
+def ensure_reward_entry(user_id):
+    """
+    Ensure a rewards row exists for user_id. Returns True if exists/created.
+    """
+    try:
+        with connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT user_id FROM rewards WHERE user_id = ?", (user_id,))
+            if cur.fetchone() is None:
+                cur.execute("INSERT INTO rewards (user_id, exp, level, avatar) VALUES (?, ?, ?, ?)",
+                            (user_id, 0, 1, "female_1.png"))
+                conn.commit()
+                print(f"[DB] Created rewards entry for user_id={user_id}")
+        return True
+    except Exception as e:
+        print(f"[DB] ensure_reward_entry error: {e}")
+        return False
+
+def get_reward_data(user_id):
+    """
+    Returns a dict with keys: user_id, exp, level, avatar
+    If no row exists, creates one and returns defaults.
+    """
+    try:
+        ensure_reward_entry(user_id)
+        with connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT user_id, exp, level, avatar FROM rewards WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+            if row:
+                return {"user_id": row[0], "exp": int(row[1]), "level": int(row[2]), "avatar": row[3]}
+    except Exception as e:
+        print(f"[DB] get_reward_data error: {e}")
+    # fallback defaults
+    return {"user_id": user_id, "exp": 0, "level": 1, "avatar": "female_1.png"}
+
+def set_avatar(user_id, avatar_filename):
+    """
+    Set the equipped avatar for user.
+    """
+    try:
+        ensure_reward_entry(user_id)
+        with connect() as conn:
+            conn.execute("UPDATE rewards SET avatar = ? WHERE user_id = ?", (avatar_filename, user_id))
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"[DB] set_avatar error: {e}")
+        return False
+
+def set_level(user_id, level):
+    """
+    Force set level (and optionally cap it between 1 and 30).
+    """
+    try:
+        level = max(1, min(30, int(level)))
+        ensure_reward_entry(user_id)
+        with connect() as conn:
+            conn.execute("UPDATE rewards SET level = ? WHERE user_id = ?", (level, user_id))
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"[DB] set_level error: {e}")
+        return False
+
+def add_exp(user_id, amount):
+    """
+    Adds EXP for the user. Handles level-up logic automatically.
+    Returns a dict: {"success": bool, "exp": int, "level": int, "leveled_up": bool}
+    Level calculation:
+      - level = 1 + (total_exp // 100)
+      - capped at level 30
+    """
+    try:
+        amount = int(amount)
+    except Exception:
+        amount = 0
+
+    try:
+        ensure_reward_entry(user_id)
+        with connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT exp, level FROM rewards WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+            if not row:
+                cur.execute("INSERT INTO rewards (user_id, exp, level, avatar) VALUES (?, ?, ?, ?)",
+                            (user_id, amount, 1, "female_1.png"))
+                conn.commit()
+                total_exp = amount
+                old_level = 1
+            else:
+                total_exp = int(row[0]) + amount
+                old_level = int(row[1])
+
+            # compute new level from total_exp
+            new_level = 1 + (total_exp // 100)
+            if new_level > 30:
+                new_level = 30
+                # cap EXP to max level range
+                total_exp = min(total_exp, 30 * 100 - 1)
+
+            cur.execute("UPDATE rewards SET exp = ?, level = ? WHERE user_id = ?", (total_exp, new_level, user_id))
+            conn.commit()
+
+            leveled_up = new_level > old_level
+            return {"success": True, "exp": total_exp, "level": new_level, "leveled_up": leveled_up}
+    except Exception as e:
+        print(f"[DB] add_exp error: {e}")
+        return {"success": False, "exp": None, "level": None, "leveled_up": False}
+
+def set_exp(user_id, exp_value):
+    """
+    Directly set EXP (useful for debugging or admin actions).
+    """
+    try:
+        exp_value = max(0, int(exp_value))
+    except Exception:
+        exp_value = 0
+    try:
+        ensure_reward_entry(user_id)
+        new_level = 1 + (exp_value // 100)
+        if new_level > 30:
+            new_level = 30
+            exp_value = min(exp_value, 30 * 100 - 1)
+        with connect() as conn:
+            conn.execute("UPDATE rewards SET exp = ?, level = ? WHERE user_id = ?", (exp_value, new_level, user_id))
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"[DB] set_exp error: {e}")
         return False
 
 # ---------- INIT ----------

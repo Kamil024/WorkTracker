@@ -76,7 +76,11 @@ def open_analytics(username, root):
 
         df = pd.DataFrame(rows, columns=["Task Name", "Category", "Status", "Start", "Due"])
 
-        # Apply date filter if provided
+        # ✅ Convert to datetime safely
+        for col in ["Start", "Due"]:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+
+        # Apply date filters
         try:
             s_date = datetime.strptime(start_entry.entry.get(), "%Y-%m-%d") if start_entry.entry.get() else None
             e_date = datetime.strptime(end_entry.entry.get(), "%Y-%m-%d") if end_entry.entry.get() else None
@@ -84,11 +88,12 @@ def open_analytics(username, root):
             Messagebox.show_error("Invalid date format.")
             return
 
-        if s_date:
+        if s_date is not None:
             df = df[df["Start"] >= s_date]
-        if e_date:
+        if e_date is not None:
             df = df[df["Due"] <= e_date]
 
+        # ✅ Add filtered data to table
         for row in df.values.tolist():
             table.insert_row(row)
 
@@ -100,7 +105,6 @@ def open_analytics(username, root):
         ax = fig.add_subplot(111)
 
         status_counts = df["Status"].value_counts()
-        # Do not hardcode colors in analytic module (but here it's minor visual)
         ax.bar(status_counts.index, status_counts.values)
         ax.set_title("Task Distribution by Status", fontsize=10)
         ax.set_ylabel("Count")
@@ -119,37 +123,46 @@ def build_tasks_dataframe(rows):
     Convert task rows to a clean pandas DataFrame.
     Accepts either the older (title, start, due, status) rows or the full rows.
     """
-    # Detect row shape
     if not rows:
         return pd.DataFrame(columns=["Title", "Start", "Due", "Status"])
 
     first = rows[0]
-    # If rows are the UI-short rows
     if len(first) == 4:
         df = pd.DataFrame(rows, columns=["Title", "Start", "Due", "Status"])
     else:
-        # Full row: (id, user_id, username, title, start_date, due_date, status, description, priority, category, estimated_minutes)
-        df = pd.DataFrame(rows, columns=["ID", "UserID", "Username", "Title", "Start", "Due", "Status", "Description", "Priority", "Category", "EstimatedMinutes"])
-        # Keep names consistent for rest of analytics
+        df = pd.DataFrame(rows, columns=[
+            "ID", "UserID", "Username", "Title", "Start", "Due",
+            "Status", "Description", "Priority", "Category", "EstimatedMinutes"
+        ])
         df = df.rename(columns={"Title": "Title", "Start": "Start", "Due": "Due", "Status": "Status"})
 
-    # convert dates
+    # ✅ Convert date columns safely
     for col in ["Start", "Due"]:
         if col in df.columns:
-            try:
-                df[col] = pd.to_datetime(df[col])
-            except Exception:
-                pass
+            df[col] = pd.to_datetime(df[col], errors="coerce")
     return df
 
 
 def compute_stats(df):
-    """Compute overall task statistics."""
+    """Compute overall task statistics safely."""
     stats = {
         "total": len(df),
-        "completed": int(((df["Status"].astype(str).str.lower()) == "completed").sum()) if "Status" in df.columns else 0,
-        "in_progress": int(((df["Status"].astype(str).str.lower()) == "in progress").sum()) if "Status" in df.columns else 0,
-        "overdue": int(((df["Status"].astype(str).str.lower()) == "overdue").sum()) if "Status" in df.columns else 0,
-        "monthly_counts": (df.groupby(df["Start"].dt.to_period("M")).size() if ("Start" in df.columns and not df["Start"].isna().all()) else pd.Series([], dtype=int))
+        "completed": int((df["Status"].astype(str).str.lower() == "completed").sum()) if "Status" in df.columns else 0,
+        "in_progress": int((df["Status"].astype(str).str.lower() == "in progress").sum()) if "Status" in df.columns else 0,
+        "overdue": int((df["Status"].astype(str).str.lower() == "overdue").sum()) if "Status" in df.columns else 0
     }
+
+    # ✅ Compute monthly counts safely
+    if "Start" in df.columns:
+        try:
+            df["Start"] = pd.to_datetime(df["Start"], errors="coerce")
+            if df["Start"].notna().any():
+                stats["monthly_counts"] = df.groupby(df["Start"].dt.to_period("M")).size()
+            else:
+                stats["monthly_counts"] = pd.Series([], dtype=int)
+        except Exception:
+            stats["monthly_counts"] = pd.Series([], dtype=int)
+    else:
+        stats["monthly_counts"] = pd.Series([], dtype=int)
+
     return stats
