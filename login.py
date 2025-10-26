@@ -5,12 +5,72 @@ import tkinter as tk
 import auth
 from dashboard import open_dashboard
 
+
+# ---------------------- SPLASH SCREEN ----------------------
+class SplashScreen(ttk.Frame):
+    def __init__(self, master, on_finish):
+        super().__init__(master)
+        self.master = master
+        self.on_finish = on_finish
+        self.master.title("Loading WorkTracker...")
+        self.master.geometry("700x400")
+        self.master.overrideredirect(True)  # Remove title bar
+        self.master.configure(bg="#4B6EF5")
+
+        # Center window
+        w = 700
+        h = 400
+        x = (self.master.winfo_screenwidth() // 2) - (w // 2)
+        y = (self.master.winfo_screenheight() // 2) - (h // 2)
+        self.master.geometry(f"{w}x{h}+{x}+{y}")
+
+        self.build_ui()
+        self.animate_progress()
+
+    def build_ui(self):
+        ttk.Label(
+            self.master,
+            text="WorkTracker Pro",
+            font=("Segoe UI Black", 38),
+            foreground="white",
+            background="#4B6EF5"
+        ).pack(pady=(100, 10))
+
+        ttk.Label(
+            self.master,
+            text="Loading... Please wait",
+            font=("Segoe UI", 14),
+            foreground="#E5E7EB",
+            background="#4B6EF5"
+        ).pack(pady=(0, 30))
+
+        self.progress = ttk.Progressbar(
+            self.master, mode="determinate", length=400, bootstyle="info-striped"
+        )
+        self.progress.pack(pady=20)
+        self.progress["value"] = 0
+
+    def animate_progress(self):
+        """Simulate a loading bar with gradual animation"""
+        value = self.progress["value"]
+        if value < 100:
+            self.progress["value"] = value + 2
+            self.master.after(40, self.animate_progress)
+        else:
+            # When done loading, open login
+            self.master.after(300, self.finish)
+
+    def finish(self):
+        for widget in self.master.winfo_children():
+            widget.destroy()
+        self.on_finish(self.master)
+
+
+# ---------------------- LOGIN WINDOW ----------------------
 class LoginWindow(ttk.Frame):
     def __init__(self, master):
         super().__init__(master)
         self.master = master
-
-        # Use tk.StringVar (not ttk.StringVar)
         self.username_var = tk.StringVar()
         self.password_var = tk.StringVar()
         self.name_var = tk.StringVar()
@@ -19,17 +79,14 @@ class LoginWindow(ttk.Frame):
         self.master.columnconfigure(0, weight=1)
         self.master.rowconfigure(0, weight=1)
 
-        # Gradient background
         self.gradient = Canvas(self.master, highlightthickness=0)
         self.gradient.grid(row=0, column=0, sticky="nsew")
 
-        # Container
         self.container = ttk.Frame(self.master)
         self.container.grid(row=0, column=0, sticky="nsew")
         self.container.columnconfigure(0, weight=1)
         self.container.rowconfigure(0, weight=1)
 
-        # Main frame
         self.main_frame = ttk.Frame(self.container)
         self.main_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.92, relheight=0.88)
         self.main_frame.columnconfigure(0, weight=1, uniform="col")
@@ -39,10 +96,7 @@ class LoginWindow(ttk.Frame):
         self.create_styles()
         self.build_ui()
 
-        # Responsive behavior only
         self.master.bind("<Configure>", self.on_resize)
-
-        # Bind Enter key only for login mode
         self.bind_enter_key()
 
     # ---------------------- STYLES ----------------------
@@ -67,7 +121,6 @@ class LoginWindow(ttk.Frame):
 
     # ---------------------- BUILD UI ----------------------
     def build_ui(self):
-        # LEFT PANEL
         left = ttk.Frame(self.main_frame)
         left.grid(row=0, column=0, sticky="nsew", padx=(40, 20), pady=30)
         left.columnconfigure(0, weight=1)
@@ -95,7 +148,7 @@ class LoginWindow(ttk.Frame):
             ttk.Label(box, text=title, style="Feature.TLabel").pack(anchor=W)
             ttk.Label(box, text=desc, style="Gray.TLabel").pack(anchor=W)
 
-        # RIGHT PANEL (login card)
+        # Right side
         right = ttk.Frame(self.main_frame)
         right.grid(row=0, column=1, sticky="nsew", padx=(20, 40), pady=30)
         right.columnconfigure(0, weight=1)
@@ -110,18 +163,14 @@ class LoginWindow(ttk.Frame):
         self.subtitle_label = ttk.Label(self.card, text="Sign in to continue to WorkTracker", style="Subtitle.TLabel")
         self.subtitle_label.grid(row=1, column=0, pady=(0, 20))
 
-        # Dynamic field section
         self.fields_frame = ttk.Frame(self.card)
         self.fields_frame.grid(row=2, column=0, sticky="ew")
         self.fields_frame.columnconfigure(0, weight=1)
 
-        # Build default login fields
         self.build_login_fields()
-
         ttk.Label(self.card, text="✨ Stay signed in for faster access", style="Gray.TLabel").grid(row=6, column=0, pady=(16, 0))
 
     def build_login_fields(self):
-        """Create the input fields depending on mode."""
         for widget in self.fields_frame.winfo_children():
             widget.destroy()
 
@@ -137,7 +186,6 @@ class LoginWindow(ttk.Frame):
         self.password_entry = ttk.Entry(self.fields_frame, textvariable=self.password_var, width=36, show="•", style="Custom.TEntry")
         self.password_entry.grid(row=5, column=0, pady=(4, 18))
 
-        # Focus cursor in username field by default
         self.username_entry.focus_set()
 
         btn_text = "Sign Up" if self.is_signup else "Sign In"
@@ -148,7 +196,7 @@ class LoginWindow(ttk.Frame):
         self.switch_button = ttk.Button(self.fields_frame, text=switch_text, bootstyle="SECONDARY", width=26, command=self.toggle_mode)
         self.switch_button.grid(row=7, column=0)
 
-    # ---------------------- RESPONSIVE BEHAVIOR ----------------------
+    # ---------------------- OTHER ----------------------
     def draw_gradient(self, w, h):
         self.gradient.delete("gradient")
         color_top = (80, 120, 250)
@@ -166,47 +214,23 @@ class LoginWindow(ttk.Frame):
         w, h = self.master.winfo_width(), self.master.winfo_height()
         if w <= 0 or h <= 0:
             return
-
         if self.gradient.winfo_exists():
             self.gradient.config(width=w, height=h)
             self.draw_gradient(w, h)
 
-        scale = max(0.6, min(1.5, w / 1100))
-        for key, base_font in self.base_fonts.items():
-            size_map = {
-                "title": 28, "subtitle": 12, "feature": 12,
-                "gray": 10, "entry": 10, "button": 10
-            }
-            base_font.configure(size=int(size_map[key] * scale))
-
-        if hasattr(self, "brand_label") and self.brand_label.winfo_exists():
-            self.brand_label.configure(font=("Segoe UI Black", int(34 * scale)))
-
-        if hasattr(self, "brand_sub") and self.brand_sub.winfo_exists():
-            self.brand_sub.configure(wraplength=int(max(250, w * 0.35)))
-
-        if hasattr(self, "card") and self.card.winfo_exists():
-            card_w = 0.8 if w > 1000 else 0.9
-            card_h = 0.75 if h > 600 else 0.85
-            self.card.place(relwidth=card_w, relheight=card_h, relx=0.5, rely=0.5, anchor="center")
-
-    # ---------------------- AUTH LOGIC ----------------------
     def toggle_mode(self):
         self.is_signup = not self.is_signup
         if self.is_signup:
             self.title_label.configure(text="Join WorkTracker 🚀")
             self.subtitle_label.configure(text="Create your account below")
-            # Unbind Enter during signup
             self.master.unbind("<Return>")
         else:
             self.title_label.configure(text="Welcome Back 👋")
             self.subtitle_label.configure(text="Sign in to continue to WorkTracker")
-            # Rebind Enter during login
             self.bind_enter_key()
         self.build_login_fields()
 
     def bind_enter_key(self):
-        """Bind Enter key only for login mode."""
         self.master.bind("<Return>", lambda event: self.handle_auth())
 
     def handle_auth(self):
@@ -228,15 +252,24 @@ class LoginWindow(ttk.Frame):
         else:
             user = auth.authenticate_user(username, password)
             if user:
-                # Save session
                 auth.save_login_state(user)
-
-                # 🔹 Disable Enter key after login success
                 self.master.unbind("<Return>")
-
-                # Clear login UI
                 for widget in self.master.winfo_children():
                     widget.destroy()
                 open_dashboard(user, self.master)
             else:
                 messagebox.showerror("Error", "Invalid username or password.")
+
+
+# ---------------------- OPEN LOGIN WINDOW ----------------------
+def open_login_window(root):
+    for widget in root.winfo_children():
+        widget.destroy()
+    LoginWindow(root)
+
+
+# ---------------------- APP ENTRY POINT ----------------------
+if __name__ == "__main__":
+    root = ttk.Window(themename="superhero")
+    SplashScreen(root, open_login_window)
+    root.mainloop()
