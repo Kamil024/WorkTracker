@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
 from ttkbootstrap.tableview import Tableview
 from ttkbootstrap.dialogs import Messagebox
 from ttkbootstrap.widgets import DateEntry
+from ttkbootstrap import Style
 from datetime import datetime
 import time
 from matplotlib.figure import Figure
@@ -993,25 +994,89 @@ def show_settings(user_id, username, frame):
         else:
             ttk.Label(card_frame, text="Locked", foreground="#999").pack(pady=(6,0))
 
+    # -------------------------
+    # Dark Mode / Theme Toggle
+    # -------------------------
+    ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(12, 10))
+    ttk.Label(frame, text="Appearance", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(4, 6))
 
-def _on_equip_click(user_id, fname, frame):
-    ok = db.set_avatar(user_id, fname)
-    if ok:
-        Messagebox.show_info("Avatar equipped.")
+    def _get_user_theme(uid):
         try:
-            with db.connect() as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT username FROM users WHERE id = ?", (user_id,))
-                row = cur.fetchone()
-                if row:
-                    username = row[0]
-                    show_settings(user_id, username, frame)
-                    return
+            t = None
+            # attempt to read persisted theme from db if function exists
+            if hasattr(db, "get_user_theme"):
+                t = db.get_user_theme(uid)
+            if isinstance(t, str) and t:
+                return t
         except Exception:
             pass
-        show_settings(user_id, "", frame)
-    else:
-        Messagebox.show_error("Failed to equip avatar.")
+        # default light theme
+        return "flatly"
+
+    def _apply_theme(theme_name):
+        try:
+            # ttkbootstrap: constructing Style with the theme will apply it to the running Tk root.
+            # Prefer using the current dashboard root if available so existing widgets refresh.
+            root = TIMER_STATE.get("root") or tk._default_root
+            # Creating a Style instance should apply the theme; pass master if constructor supports it.
+            try:
+                # common usage
+                Style(theme=theme_name)
+            except TypeError:
+                # fallback in case the constructor signature differs
+                Style(theme_name)
+        except Exception:
+            try:
+                # last resort: try using a Style instance and theme_use
+                s = Style()
+                try:
+                    s.theme_use(theme_name)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    current_theme = _get_user_theme(user_id)
+    is_dark = current_theme == "darkly" or current_theme.startswith("dark")
+
+    theme_var = tk.BooleanVar(value=is_dark)
+
+    def on_theme_toggle():
+        # Toggle behaves like a lever: apply immediately and persist, no confirmation dialog.
+        new_theme = "darkly" if theme_var.get() else "flatly"
+        _apply_theme(new_theme)
+        try:
+            if hasattr(db, "set_user_theme"):
+                db.set_user_theme(user_id, new_theme)
+        except Exception:
+            pass
+        # Update inline label to reflect new state (no popup/confirmation)
+        try:
+            theme_label.config(text=f"Current: {'Dark' if theme_var.get() else 'Light'}")
+        except Exception:
+            pass
+
+    theme_frame = ttk.Frame(frame)
+    theme_frame.pack(fill="x", pady=(6, 0))
+    # Render as a lever-style switch (label + switch) using ttkbootstrap switch bootstyle
+    ttk.Label(theme_frame, text="Dark Mode", font=("Segoe UI", 10)).pack(side="left")
+    try:
+        # bootstyle 'success-switch' gives a lever-like appearance
+        chk = ttk.Checkbutton(theme_frame, variable=theme_var, bootstyle="success-switch", command=on_theme_toggle)
+    except Exception:
+        # fallback to standard checkbutton if bootstyle unsupported
+        chk = ttk.Checkbutton(theme_frame, text="Enable Dark Mode", variable=theme_var, command=on_theme_toggle)
+    chk.pack(side="left", padx=(8,0))
+
+    # show current theme text
+    theme_label = ttk.Label(theme_frame, text=f"Current: {'Dark' if is_dark else 'Light'}", font=("Segoe UI", 9), foreground="#666")
+    theme_label.pack(side="left", padx=(12,0))
+
+    # Apply the user's theme immediately when opening settings (best-effort)
+    try:
+        _apply_theme(current_theme)
+    except Exception:
+        pass
 
 
 #  Analytics 
