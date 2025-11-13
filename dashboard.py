@@ -9,6 +9,9 @@ import time
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
+import json
+import matplotlib as mpl
+
 
 # Pillow for image handling
 from PIL import Image, ImageTk, ImageOps
@@ -32,6 +35,9 @@ TIMER_STATE = {
     "base_seconds": 0.0,
 }
 
+# store last analytics figures/canvas so theme switches can refresh them
+ANALYTIC_STATE = {"fig": None, "canvas": None}
+
 # Avatar unlock mapping (filename -> required level)
 AVATAR_UNLOCKS = [
     ("female_1.png", 1),
@@ -45,11 +51,184 @@ AVATAR_UNLOCKS = [
     ("male_4.png", 27),
 ]
 
+# Local JSON fallback for theme persistence (used if db lacks theme functions)
+_THEME_STORE_PATH = os.path.join(os.path.dirname(__file__), "user_themes.json")
+
+
+def _read_local_theme_store():
+    try:
+        if os.path.exists(_THEME_STORE_PATH):
+            with open(_THEME_STORE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _write_local_theme_store(d):
+    try:
+        with open(_THEME_STORE_PATH, "w", encoding="utf-8") as f:
+            json.dump(d, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def _get_user_theme(uid):
+    # Prefer DB accessor then local JSON fallback, default to 'flatly'
+    try:
+        if hasattr(db, "get_user_theme"):
+            t = db.get_user_theme(uid)
+            if isinstance(t, str) and t:
+                return t
+    except Exception:
+        pass
+
+    store = _read_local_theme_store()
+    try:
+        t = store.get(str(uid))
+        if isinstance(t, str) and t:
+            return t
+    except Exception:
+        pass
+
+    return "flatly"
+
+
+def _save_user_theme(uid, theme_name):
+    saved = False
+    try:
+        if hasattr(db, "set_user_theme"):
+            db.set_user_theme(uid, theme_name)
+            saved = True
+    except Exception:
+        saved = False
+
+    try:
+        store = _read_local_theme_store()
+        store[str(uid)] = theme_name
+        _write_local_theme_store(store)
+        saved = True
+    except Exception:
+        pass
+
+    return saved
+
+
+def _apply_theme(theme_name):
+    """
+    Apply ttkbootstrap theme and update matplotlib rcParams for dark/light modes.
+    Also refresh any active analytic FigureCanvas.
+    """
+    root = TIMER_STATE.get("root") or tk._default_root
+    # Apply ttkbootstrap theme (best-effort)
+    try:
+        try:
+            Style(theme=theme_name)
+        except TypeError:
+            Style(theme_name)
+    except Exception:
+        try:
+            s = Style()
+            try:
+                s.theme_use(theme_name)
+            except Exception:
+                pass
+        except Exception:
+            try:
+                s2 = ttk.Style()
+                s2.theme_use(theme_name)
+            except Exception:
+                pass
+
+    # Update matplotlib rcParams to match light/dark style
+    try:
+        if str(theme_name).lower().startswith("dark"):
+            mpl.rcParams.update({
+                "figure.facecolor": "#2b2b2b",
+                "axes.facecolor": "#2b2b2b",
+                "axes.edgecolor": "#cfcfcf",
+                "axes.labelcolor": "#e6e6e6",
+                "xtick.color": "#e6e6e6",
+                "ytick.color": "#e6e6e6",
+                "text.color": "#e6e6e6",
+                "grid.color": "#444444",
+                "savefig.facecolor": "#2b2b2b"
+            })
+        else:
+            mpl.rcParams.update({
+                "figure.facecolor": "white",
+                "axes.facecolor": "white",
+                "axes.edgecolor": "black",
+                "axes.labelcolor": "black",
+                "xtick.color": "black",
+                "ytick.color": "black",
+                "text.color": "black",
+                "grid.color": "#e6e6e6",
+                "savefig.facecolor": "white"
+            })
+    except Exception:
+        pass
+
+    # If an analytics figure is visible, update its colors and redraw
+    try:
+        fig = ANALYTIC_STATE.get("fig")
+        canvas = ANALYTIC_STATE.get("canvas")
+        if fig is not None:
+            fig.set_facecolor(mpl.rcParams.get("figure.facecolor", "white"))
+            for ax in fig.axes:
+                try:
+                    ax.set_facecolor(mpl.rcParams.get("axes.facecolor", "white"))
+                    text_color = mpl.rcParams.get("text.color", "black")
+                    try:
+                        ax.title.set_color(text_color)
+                    except Exception:
+                        pass
+                    try:
+                        ax.xaxis.label.set_color(text_color)
+                        ax.yaxis.label.set_color(text_color)
+                    except Exception:
+                        pass
+                    ax.tick_params(axis="x", colors=mpl.rcParams.get("xtick.color"))
+                    ax.tick_params(axis="y", colors=mpl.rcParams.get("ytick.color"))
+                    for txt in getattr(ax, "texts", []):
+                        try:
+                            txt.set_color(text_color)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            if canvas is not None:
+                try:
+                    canvas.draw_idle()
+                except Exception:
+                    try:
+                        canvas.draw()
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # Force small GUI refresh
+    try:
+        if root:
+            root.update_idletasks()
+            root.update()
+    except Exception:
+        pass
+
 
 #  Dashboard 
 def open_dashboard(user, root):
     username = user["username"]
     user_id = user["id"]
+
+    # Apply user's persisted theme when opening dashboard
+    try:
+        theme_name = _get_user_theme(user_id)
+        _apply_theme(theme_name)
+    except Exception:
+        pass
 
     for w in root.winfo_children():
         w.destroy()
@@ -151,6 +330,7 @@ def clear_frame(f):
     for w in f.winfo_children():
         w.destroy()
 
+
 def card(parent, title, value, icon=None):
     f = ttk.Frame(parent, padding=12)
     f.pack(side="left", expand=True, fill="both", padx=8)
@@ -159,7 +339,8 @@ def card(parent, title, value, icon=None):
     if icon:
         ttk.Label(f, text=icon, font=("Segoe UI Emoji", 16)).pack(anchor="e")
 
-def _load_avatar_thumbnail(filename, size=(64,64), greyscale=False):
+
+def _load_avatar_thumbnail(filename, size=(64, 64), greyscale=False):
     """
     Load avatar image from AVATAR_DIR and return a PhotoImage.
     If image missing, returns None.
@@ -175,6 +356,7 @@ def _load_avatar_thumbnail(filename, size=(64,64), greyscale=False):
         return ImageTk.PhotoImage(img)
     except Exception:
         return None
+
 
 #  Add Task Modal (modern, compatible) 
 def open_add_task_modal(user_id, username, parent_frame):
@@ -323,13 +505,13 @@ def delete_task_action(user_id, username, parent_frame):
         f"Are you sure you want to delete the task:\n\n'{title}'?\n\nThis action cannot be undone.",
         "Confirm Deletion"
     )
-    
+
     if not confirm:
         return
 
     # Perform deletion
     success = tasks.safe_delete_task(username, title)
-    
+
     if success:
         Messagebox.show_info("Task deleted successfully!")
         show_tasks(user_id, username, parent_frame)
@@ -516,7 +698,6 @@ def open_edit_task_modal(user_id, username, parent_frame):
         prev_status = status_old
 
         # Call tasks.update_task in the dashboard-style pattern:
-        # (user_id, username, title_old, new_title, new_start, new_due, new_status, ...)
         try:
             success = tasks.update_task(
                 user_id,
@@ -535,7 +716,7 @@ def open_edit_task_modal(user_id, username, parent_frame):
             # fallback: call in positional signature that some older tasks.update_task might expect
             try:
                 success = tasks.update_task(
-                    title_old,  # not ideal but try anything
+                    title_old,
                     username,
                     new_title,
                     new_start,
@@ -675,7 +856,7 @@ def show_admin_panel(user_id, username, frame):
     # Buttons: Add, Subtract, Set
     btns = ttk.Frame(exp_tab)
     btns.grid(row=3, column=1, sticky="w", padx=(12, 0))
-    
+
     def admin_add_exp():
         sel = user_var.get()
         if not sel:
@@ -742,36 +923,36 @@ def show_admin_panel(user_id, username, frame):
         else:
             Messagebox.show_error("Failed to set EXP.")
 
-    ttk.Button(btns, text="Add EXP", command=admin_add_exp, bootstyle="success-outline").pack(side="left", padx=(0,6))
-    ttk.Button(btns, text="Subtract EXP", command=admin_subtract_exp, bootstyle="warning-outline").pack(side="left", padx=(0,6))
-    ttk.Button(btns, text="Set EXP", command=admin_set_exp, bootstyle="secondary-outline").pack(side="left", padx=(0,6))
+    ttk.Button(btns, text="Add EXP", command=admin_add_exp, bootstyle="success-outline").pack(side="left", padx=(0, 6))
+    ttk.Button(btns, text="Subtract EXP", command=admin_subtract_exp, bootstyle="warning-outline").pack(side="left", padx=(0, 6))
+    ttk.Button(btns, text="Set EXP", command=admin_set_exp, bootstyle="secondary-outline").pack(side="left", padx=(0, 6))
 
     # Tab 2: Task Management
     task_tab = ttk.Frame(notebook, padding=10)
     notebook.add(task_tab, text="Task Management")
 
     ttk.Label(task_tab, text="Manage Tasks for All Users", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 10))
-    
+
     # User selection for task management
     user_task_frame = ttk.Frame(task_tab)
     user_task_frame.pack(fill="x", pady=(0, 10))
-    
+
     ttk.Label(user_task_frame, text="Select User:").pack(side="left", padx=(0, 8))
     task_user_var = tk.StringVar()
     task_user_combo = ttk.Combobox(user_task_frame, values=usernames_list, textvariable=task_user_var, state="readonly", width=20)
     task_user_combo.pack(side="left", padx=(0, 12))
     if usernames_list:
         task_user_combo.set(usernames_list[0])
-    
+
     def refresh_admin_tasks():
         selected_user = task_user_var.get()
         if not selected_user:
             return
-        
+
         # Clear existing table
         for widget in task_display_frame.winfo_children():
             widget.destroy()
-        
+
         # Get tasks for selected user
         try:
             rows_full = tasks.get_tasks_full_rows(selected_user)
@@ -784,39 +965,39 @@ def show_admin_panel(user_id, username, frame):
         except Exception:
             rows = tasks.get_tasks_rows(selected_user)
             columns = ["Title", "Start Date", "Due Date", "Status"]
-        
+
         if not rows:
             ttk.Label(task_display_frame, text=f"No tasks found for {selected_user}", foreground="#888").pack(pady=20)
             return
-        
+
         table = Tableview(master=task_display_frame, coldata=columns, rowdata=rows, paginated=False, searchable=True, height=15)
         table.pack(fill="both", expand=True)
         task_display_frame.table = table
-    
+
     ttk.Button(user_task_frame, text="🔄 Refresh", command=refresh_admin_tasks).pack(side="left", padx=(0, 12))
-    
+
     # Delete button for admin
     def admin_delete_task():
         selected_user = task_user_var.get()
         if not selected_user:
             Messagebox.show_error("Please select a user first.")
             return
-        
+
         table = getattr(task_display_frame, "table", None)
         if not table:
             Messagebox.show_error("No tasks loaded. Click Refresh first.")
             return
-        
+
         selected = table.view.selection()
         if not selected:
             Messagebox.show_error("Please select a task to delete.")
             return
-        
+
         selected_item = table.view.item(selected[0])["values"]
         if not selected_item:
             Messagebox.show_error("Invalid task data.")
             return
-        
+
         # Support both formats
         if len(selected_item) >= 6:
             title = selected_item[0]
@@ -825,44 +1006,44 @@ def show_admin_panel(user_id, username, frame):
         else:
             Messagebox.show_error("Invalid task data format.")
             return
-        
+
         # Confirm deletion
         confirm = Messagebox.okcancel(
             f"Are you sure you want to delete '{title}' for user '{selected_user}'?\n\nThis action cannot be undone.",
             "Admin: Confirm Deletion"
         )
-        
+
         if not confirm:
             return
-        
+
         # Perform deletion
         success = tasks.safe_delete_task(selected_user, title)
-        
+
         if success:
             Messagebox.show_info(f"Task deleted successfully for {selected_user}!")
             refresh_admin_tasks()
         else:
             Messagebox.show_error("Failed to delete task.")
-    
+
     ttk.Button(user_task_frame, text="🗑️ Delete Selected Task", command=admin_delete_task, bootstyle="danger").pack(side="left")
-    
+
     # Task display area
     task_display_frame = ttk.Frame(task_tab)
     task_display_frame.pack(fill="both", expand=True, pady=(10, 0))
-    
+
     # Auto-cleanup section
     ttk.Separator(task_tab, orient="horizontal").pack(fill="x", pady=(15, 10))
     cleanup_frame = ttk.Frame(task_tab)
     cleanup_frame.pack(fill="x", pady=(5, 0))
-    
+
     ttk.Label(cleanup_frame, text="Auto-Cleanup:", font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 10))
     ttk.Label(cleanup_frame, text="Delete overdue tasks older than:").pack(side="left", padx=(0, 6))
-    
+
     days_var = tk.StringVar(value="30")
     days_entry = ttk.Entry(cleanup_frame, textvariable=days_var, width=8)
     days_entry.pack(side="left", padx=(0, 6))
     ttk.Label(cleanup_frame, text="days").pack(side="left", padx=(0, 12))
-    
+
     def run_auto_cleanup():
         try:
             days = int(days_var.get())
@@ -872,15 +1053,15 @@ def show_admin_panel(user_id, username, frame):
         except Exception:
             Messagebox.show_error("Enter a valid number of days.")
             return
-        
+
         confirm = Messagebox.okcancel(
             f"This will permanently delete all overdue (non-completed) tasks older than {days} days.\n\nContinue?",
             "Confirm Auto-Cleanup"
         )
-        
+
         if not confirm:
             return
-        
+
         result = tasks.auto_delete_overdue(days)
         if result.get("success"):
             deleted_count = result.get("deleted", 0)
@@ -888,9 +1069,9 @@ def show_admin_panel(user_id, username, frame):
             refresh_admin_tasks()
         else:
             Messagebox.show_error(f"Auto-cleanup failed: {result.get('error', 'Unknown error')}")
-    
+
     ttk.Button(cleanup_frame, text="🧹 Run Cleanup", command=run_auto_cleanup, bootstyle="warning").pack(side="left")
-    
+
     # Initial load
     refresh_admin_tasks()
 
@@ -935,9 +1116,9 @@ def show_rewards(user_id, username, frame):
         ttk.Label(frm, text=f"Lvl {req_level}", font=("Segoe UI", 8)).pack()
         if unlocked:
             btn = ttk.Button(frm, text="Equip", command=lambda f=fname: _equip_avatar(user_id, f, frame))
-            btn.pack(pady=(6,0))
+            btn.pack(pady=(6, 0))
         else:
-            ttk.Label(frm, text="Locked", font=("Segoe UI", 8), foreground="#888").pack(pady=(6,0))
+            ttk.Label(frm, text="Locked", font=("Segoe UI", 8), foreground="#888").pack(pady=(6, 0))
 
 
 def _equip_avatar(user_id, avatar_filename, parent_frame=None):
@@ -954,6 +1135,17 @@ def _equip_avatar(user_id, avatar_filename, parent_frame=None):
         Messagebox.show_error("Failed to equip avatar.")
 
 
+def _on_equip_click(user_id, avatar_filename, parent_frame=None):
+    # wrapper to maintain compatibility with different parts of UI
+    _equip_avatar(user_id, avatar_filename, parent_frame)
+    # refresh settings page to show updated equipped state
+    try:
+        if parent_frame and hasattr(parent_frame, "winfo_children"):
+            show_settings(user_id, db.get_username(user_id) if hasattr(db, "get_username") else "", parent_frame)
+    except Exception:
+        pass
+
+
 #  Settings 
 def show_settings(user_id, username, frame):
     clear_frame(frame)
@@ -962,7 +1154,7 @@ def show_settings(user_id, username, frame):
 
     # Avatar Customization panel
     ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=10)
-    ttk.Label(frame, text="Avatar Customization", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8,6))
+    ttk.Label(frame, text="Avatar Customization", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 6))
 
     reward = db.get_reward_data(user_id)
     level = reward.get("level", 1)
@@ -988,11 +1180,11 @@ def show_settings(user_id, username, frame):
 
         if unlocked:
             if fname == current_avatar:
-                ttk.Label(card_frame, text="Equipped", font=("Segoe UI", 9, "bold")).pack(pady=(4,0))
+                ttk.Label(card_frame, text="Equipped", font=("Segoe UI", 9, "bold")).pack(pady=(4, 0))
             else:
-                ttk.Button(card_frame, text="Equip", command=lambda f=fname: _on_equip_click(user_id, f, frame)).pack(pady=(6,0))
+                ttk.Button(card_frame, text="Equip", command=lambda f=fname: _on_equip_click(user_id, f, frame)).pack(pady=(6, 0))
         else:
-            ttk.Label(card_frame, text="Locked", foreground="#999").pack(pady=(6,0))
+            ttk.Label(card_frame, text="Locked", foreground="#999").pack(pady=(6, 0))
 
     # -------------------------
     # Dark Mode / Theme Toggle
@@ -1000,57 +1192,20 @@ def show_settings(user_id, username, frame):
     ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=(12, 10))
     ttk.Label(frame, text="Appearance", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(4, 6))
 
-    def _get_user_theme(uid):
-        try:
-            t = None
-            # attempt to read persisted theme from db if function exists
-            if hasattr(db, "get_user_theme"):
-                t = db.get_user_theme(uid)
-            if isinstance(t, str) and t:
-                return t
-        except Exception:
-            pass
-        # default light theme
-        return "flatly"
-
-    def _apply_theme(theme_name):
-        try:
-            # ttkbootstrap: constructing Style with the theme will apply it to the running Tk root.
-            # Prefer using the current dashboard root if available so existing widgets refresh.
-            root = TIMER_STATE.get("root") or tk._default_root
-            # Creating a Style instance should apply the theme; pass master if constructor supports it.
-            try:
-                # common usage
-                Style(theme=theme_name)
-            except TypeError:
-                # fallback in case the constructor signature differs
-                Style(theme_name)
-        except Exception:
-            try:
-                # last resort: try using a Style instance and theme_use
-                s = Style()
-                try:
-                    s.theme_use(theme_name)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-
     current_theme = _get_user_theme(user_id)
-    is_dark = current_theme == "darkly" or current_theme.startswith("dark")
+    is_dark = str(current_theme).lower().startswith("dark")
 
     theme_var = tk.BooleanVar(value=is_dark)
 
     def on_theme_toggle():
-        # Toggle behaves like a lever: apply immediately and persist, no confirmation dialog.
         new_theme = "darkly" if theme_var.get() else "flatly"
         _apply_theme(new_theme)
+        _save_user_theme(user_id, new_theme)
         try:
             if hasattr(db, "set_user_theme"):
                 db.set_user_theme(user_id, new_theme)
         except Exception:
             pass
-        # Update inline label to reflect new state (no popup/confirmation)
         try:
             theme_label.config(text=f"Current: {'Dark' if theme_var.get() else 'Light'}")
         except Exception:
@@ -1066,11 +1221,11 @@ def show_settings(user_id, username, frame):
     except Exception:
         # fallback to standard checkbutton if bootstyle unsupported
         chk = ttk.Checkbutton(theme_frame, text="Enable Dark Mode", variable=theme_var, command=on_theme_toggle)
-    chk.pack(side="left", padx=(8,0))
+    chk.pack(side="left", padx=(8, 0))
 
     # show current theme text
     theme_label = ttk.Label(theme_frame, text=f"Current: {'Dark' if is_dark else 'Light'}", font=("Segoe UI", 9), foreground="#666")
-    theme_label.pack(side="left", padx=(12,0))
+    theme_label.pack(side="left", padx=(12, 0))
 
     # Apply the user's theme immediately when opening settings (best-effort)
     try:
@@ -1103,10 +1258,27 @@ def show_analytic(username, frame):
 
     monthly_counts = stats["monthly_counts"]
 
-    fig = Figure(figsize=(10, 4), dpi=100)
+    # create figure using current mpl theme colors so it follows dark/light mode
+    fig = Figure(figsize=(10, 4), dpi=100, facecolor=mpl.rcParams.get("figure.facecolor", "white"))
     ax1 = fig.add_subplot(131)
     ax2 = fig.add_subplot(132)
     ax3 = fig.add_subplot(133)
+
+    # ensure axes follow theme colors immediately
+    try:
+        for ax in (ax1, ax2, ax3):
+            ax.set_facecolor(mpl.rcParams.get("axes.facecolor", "white"))
+            text_color = mpl.rcParams.get("text.color", "black")
+            ax.title.set_color(text_color)
+            try:
+                ax.xaxis.label.set_color(text_color)
+                ax.yaxis.label.set_color(text_color)
+            except Exception:
+                pass
+            ax.tick_params(axis="x", colors=mpl.rcParams.get("xtick.color"))
+            ax.tick_params(axis="y", colors=mpl.rcParams.get("ytick.color"))
+    except Exception:
+        pass
 
     ax1.bar(monthly_counts.index.astype(str), monthly_counts.values)
     ax1.set_title("Tasks per Month", fontsize=9)
@@ -1114,7 +1286,7 @@ def show_analytic(username, frame):
 
     labels = ["Completed", "In Progress", "Overdue"]
     values = [stats["completed"], stats["in_progress"], stats["overdue"]]
-    ax2.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
+    ax2.pie(values, labels=labels, autopct="%1.1f%%", startangle=90, textprops={"color": mpl.rcParams.get("text.color", "black")})
     ax2.set_title("Task Distribution", fontsize=9)
 
     if not df["Due"].isna().all():
@@ -1123,13 +1295,20 @@ def show_analytic(username, frame):
         ax3.set_title("Task Timeline", fontsize=9)
         ax3.tick_params(axis="x", rotation=30)
     else:
-        ax3.text(0.5, 0.5, "No due date data", ha="center", va="center", color="#888")
+        ax3.text(0.5, 0.5, "No due date data", ha="center", va="center", color=mpl.rcParams.get("text.color", "#888"))
 
     chart_frame = ttk.Frame(frame)
     chart_frame.pack(fill="both", expand=True, pady=(10, 20))
     canvas = FigureCanvasTkAgg(fig, master=chart_frame)
     canvas.draw()
     canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    # remember for live theme updates
+    try:
+        ANALYTIC_STATE["fig"] = fig
+        ANALYTIC_STATE["canvas"] = canvas
+    except Exception:
+        pass
 
 
 #  Timer Logic 
@@ -1141,6 +1320,7 @@ def refresh_timer_label():
         s = sec % 60
         TIMER_STATE["label"].config(text=f"{h:02}:{m:02}:{s:02}")
 
+
 def update_timer():
     if TIMER_STATE["running"]:
         current_time = time.time()
@@ -1150,6 +1330,7 @@ def update_timer():
     if TIMER_STATE.get("root"):
         TIMER_STATE["after_id"] = TIMER_STATE["root"].after(1000, update_timer)
 
+
 def start_timer():
     if not TIMER_STATE["running"]:
         TIMER_STATE["running"] = True
@@ -1157,6 +1338,7 @@ def start_timer():
         TIMER_STATE["base_seconds"] = TIMER_STATE.get("seconds", 0)
         if not TIMER_STATE.get("after_id"):
             TIMER_STATE["after_id"] = TIMER_STATE["root"].after(1000, update_timer)
+
 
 def pause_timer():
     if TIMER_STATE["running"]:
@@ -1169,6 +1351,7 @@ def pause_timer():
         except Exception:
             pass
         TIMER_STATE["after_id"] = None
+
 
 def reset_timer():
     if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):
@@ -1185,13 +1368,30 @@ def reset_timer():
     refresh_timer_label()
 
 
-#  Overview 
+#  Overview x   
+
 def show_welcome(user_id, username, frame):
     clear_frame(frame)
-    ttk.Label(frame, text=f"Welcome back, {username}!", font=("Segoe UI", 20, "bold")).pack(anchor="w")
-    ttk.Label(frame, text="Your productivity overview for today.", font=("Segoe UI", 10),
-              foreground="#6c757d").pack(anchor="w", pady=(4, 10))
+    
+    # Create top section with welcome text and calendar
+    top_frame = ttk.Frame(frame)
+    top_frame.pack(fill="x", pady=(0, 15))
+    
+    # Welcome text on left
+    text_frame = ttk.Frame(top_frame)
+    text_frame.pack(side="left", fill="both", expand=True)
+    ttk.Label(text_frame, text=f"Welcome back, {username}!", font=("Segoe UI", 20, "bold")).pack(anchor="w")
+    ttk.Label(text_frame, text="Your productivity overview for today.", font=("Segoe UI", 10),
+              foreground="#6c757d").pack(anchor="w", pady=(4, 0))
+              
+    # Calendar on right
+    cal_frame = ttk.Frame(top_frame)
+    cal_frame.pack(side="right", padx=(20, 0))
+    calendar = DateEntry(cal_frame, firstweekday=0, dateformat="%Y-%m-%d", width=20, 
+                        bootstyle="primary")
+    calendar.pack(padx=5, pady=5)
 
+    # Stats section
     tasks_rows = tasks.get_tasks_rows(username)
     completed = in_progress = overdue = 0
 
