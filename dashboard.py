@@ -1370,28 +1370,110 @@ def reset_timer():
 
 #  Overview x   
 
+# def show_welcome(user_id, username, frame):
+#     clear_frame(frame)
+    
+#     # Create top section with welcome text and calendar
+#     top_frame = ttk.Frame(frame)
+#     top_frame.pack(fill="x", pady=(0, 15))
+    
+#     # Welcome text on left
+#     text_frame = ttk.Frame(top_frame)
+#     text_frame.pack(side="left", fill="both", expand=True)
+#     ttk.Label(text_frame, text=f"Welcome back, {username}!", font=("Segoe UI", 20, "bold")).pack(anchor="w")
+#     ttk.Label(text_frame, text="Your productivity overview for today.", font=("Segoe UI", 10),
+#               foreground="#6c757d").pack(anchor="w", pady=(4, 0))
+              
+#     # Calendar on right
+#     cal_frame = ttk.Frame(top_frame)
+#     cal_frame.pack(side="right", padx=(20, 0))
+#     calendar = DateEntry(cal_frame, firstweekday=0, dateformat="%Y-%m-%d", width=20, 
+#                         bootstyle="primary")
+#     calendar.pack(padx=5, pady=5)
+
+#     # Stats section
+#     tasks_rows = tasks.get_tasks_rows(username)
+#     completed = in_progress = overdue = 0
+
+#     if tasks_rows:
+#         for t in tasks_rows:
+#             status = str(t[3]).strip().lower() if len(t) > 3 else ""
+#             if status == "completed":
+#                 completed += 1
+#             elif status == "in progress":
+#                 in_progress += 1
+#             elif status == "overdue":
+#                 overdue += 1
+
+#     focus_time = completed * 60
+
+#     stats_frame = ttk.Frame(frame)
+#     stats_frame.pack(fill="x", pady=(18, 12))
+#     card(stats_frame, "Completed", completed, icon="✅")
+#     card(stats_frame, "In Progress", in_progress, icon="🔁")
+#     card(stats_frame, "Overdue", overdue, icon="⚠️")
+#     card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱")
+import tkinter as tk
+from tkinter import ttk
+# If using ttkbootstrap, you would replace these imports with:
+# from ttkbootstrap import Style, DateEntry 
+
+# --- CORE FUNCTIONS ---
+
+def clear_frame(frame):
+    """Destroys all widgets inside the given frame."""
+    for widget in frame.winfo_children():
+        widget.destroy()
+
+def card(master, title, value, icon, style="primary"):
+    """
+    Creates a visually prominent, color-coded card for statistics using ttk styles.
+    Requires a theme system (like ttkbootstrap) for the 'style' attribute to work with colors.
+    """
+    # Use a colored frame/card style (e.g., success.TFrame, danger.TFrame)
+    # The padding and style create the visual design requested.
+    card_frame = ttk.Frame(master, padding=15, style=f"{style}.TFrame") 
+    card_frame.pack(side="left", fill="both", expand=True, padx=8)
+
+    # Icon and Title Header
+    header_frame = ttk.Frame(card_frame)
+    header_frame.pack(fill="x")
+    
+    # Large Icon
+    ttk.Label(header_frame, text=icon, font=("Segoe UI", 28, "bold"), foreground="#343a40").pack(side="left", padx=(0, 10))
+    
+    # Title
+    ttk.Label(header_frame, text=title, font=("Segoe UI", 12, "bold"), foreground="#495057").pack(side="left", anchor="w")
+    
+    # Main Value (Emphasized design)
+    ttk.Label(card_frame, text=value, font=("Segoe UI", 38, "bold"), 
+              foreground="#212529", anchor="w").pack(fill="x", pady=(10, 0))
+
+
 def show_welcome(user_id, username, frame):
     clear_frame(frame)
     
-    # Create top section with welcome text and calendar
+    # --- Top Section: Welcome Text and Calendar ---
     top_frame = ttk.Frame(frame)
     top_frame.pack(fill="x", pady=(0, 15))
     
-    # Welcome text on left
+    # Welcome text on left (Larger, bolder)
     text_frame = ttk.Frame(top_frame)
     text_frame.pack(side="left", fill="both", expand=True)
-    ttk.Label(text_frame, text=f"Welcome back, {username}!", font=("Segoe UI", 20, "bold")).pack(anchor="w")
-    ttk.Label(text_frame, text="Your productivity overview for today.", font=("Segoe UI", 10),
-              foreground="#6c757d").pack(anchor="w", pady=(4, 0))
+    ttk.Label(text_frame, text=f"Welcome back, {username}!", 
+              font=("Segoe UI", 24, "bold"), foreground="#212529").pack(anchor="w")
+    ttk.Label(text_frame, text="Your productivity overview for today.", 
+              font=("Segoe UI", 12), foreground="#6c757d").pack(anchor="w", pady=(4, 0))
               
     # Calendar on right
     cal_frame = ttk.Frame(top_frame)
     cal_frame.pack(side="right", padx=(20, 0))
+    # Note: DateEntry is assumed to be defined/imported correctly (e.g., from ttkbootstrap)
     calendar = DateEntry(cal_frame, firstweekday=0, dateformat="%Y-%m-%d", width=20, 
                         bootstyle="primary")
     calendar.pack(padx=5, pady=5)
 
-    # Stats section
+    # --- Stats Calculation (Original Logic) ---
     tasks_rows = tasks.get_tasks_rows(username)
     completed = in_progress = overdue = 0
 
@@ -1407,12 +1489,66 @@ def show_welcome(user_id, username, frame):
 
     focus_time = completed * 60
 
+    # --- Stats Display Section (Designed Overview) ---
+    
+    # Descriptive header
+    ttk.Label(frame, text="📈 Status Overview", font=("Segoe UI", 16, "bold"), 
+              foreground="#495057").pack(anchor="w", pady=(10, 8))
+              
     stats_frame = ttk.Frame(frame)
-    stats_frame.pack(fill="x", pady=(18, 12))
-    card(stats_frame, "Completed", completed, icon="✅")
-    card(stats_frame, "In Progress", in_progress, icon="🔁")
-    card(stats_frame, "Overdue", overdue, icon="⚠️")
-    card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱")
+    stats_frame.pack(fill="x", pady=(0, 12))
+    
+    # Designed Cards: Color-coded by status
+    card(stats_frame, "Completed", completed, icon="✅", style="success") 
+    card(stats_frame, "In Progress", in_progress, icon="🔁", style="info") 
+    card(stats_frame, "Overdue", overdue, icon="⚠️", style="danger")       
+    card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱", style="primary")
+
+
+# --- RUNNABLE EXAMPLE BLOCK (The 'Fix') ---
+
+if __name__ == '__main__':
+    # --- MOCK/PLACEHOLDER DEFINITIONS FOR RUNNING ---
+    class MockTasks:
+        def get_tasks_rows(self, username):
+            return [
+                (1, 1, "Design UI", "Completed", "2025-11-16"),
+                (2, 1, "Code Backend", "In Progress", "2025-11-17"),
+                (3, 1, "Write Docs", "Overdue", "2025-11-10"),
+                (4, 1, "Test Feature A", "Completed", "2025-11-16"),
+                (5, 1, "Debug Login", "In Progress", "2025-11-18"),
+            ]
+    tasks = MockTasks()
+
+    class DateEntry(ttk.Frame):
+        def __init__(self, master=None, bootstyle="primary", **kw):
+            super().__init__(master, **kw)
+            ttk.Label(self, text="[Date Picker Placeholder]").pack(padx=5, pady=5)
+            
+    # Attempt to import ttkbootstrap for styling. If it fails, use standard tkinter.
+    try:
+        from ttkbootstrap import Style
+        root = Style("flatly").master # Apply a modern theme
+        print("Using ttkbootstrap theme.")
+    except ImportError:
+        root = tk.Tk()
+        # Fallback to standard ttk style setup if ttkbootstrap isn't installed
+        style = ttk.Style()
+        style.configure("success.TFrame", background="#d4edda", foreground="#155724")
+        style.configure("info.TFrame", background="#d1ecf1", foreground="#0c5460")
+        style.configure("danger.TFrame", background="#f8d7da", foreground="#721c24")
+        style.configure("primary.TFrame", background="#cce5ff", foreground="#004085")
+        print("ttkbootstrap not found. Using standard ttk with custom styles.")
+        
+    root.title("Productivity Dashboard")
+    
+    main_frame = ttk.Frame(root, padding=20)
+    main_frame.pack(fill="both", expand=True)
+    
+    # Run the welcome function
+    show_welcome(user_id=1, username="Alice", frame=main_frame)
+    
+    root.mainloop()
 
 
 #  Logout 
