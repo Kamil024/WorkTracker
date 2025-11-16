@@ -220,6 +220,21 @@ def delete_task(username, title):
         print(f"[DB] delete_task error: {e}")
         return False
 
+def update_task_status(task_id, new_status):
+    """Update task status by ID."""
+    try:
+        with connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE tasks SET status = ? WHERE id = ?",
+                (new_status, task_id)
+            )
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"[Error] update_task_status: {e}")
+        return False
+
 #  REWARDS / EXP OPERATIONS 
 
 def ensure_reward_entry(user_id):
@@ -358,4 +373,11 @@ def set_exp(user_id, exp_value):
 
 def initialize_database():
     migrate_schema_if_needed()
+    # Auto-create a test admin account for local development (remove/change in production)
+    try:
+        if get_user("admin") is None:
+            insert_user("admin", "admin")  # default admin/admin
+            print("[DB] Created default admin (admin/admin)")
+    except Exception:
+        pass
     print("[DB] Database initialized successfully.")

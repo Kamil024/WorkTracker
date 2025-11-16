@@ -3,6 +3,7 @@ Wrapper around db task operations used by the UI.
 Keeps backward-compatible function signatures.
 Adds safe delete and auto-cleanup helpers.
 """
+from datetime import datetime, date
 import db
 import datetime
 import sqlite3
@@ -331,3 +332,41 @@ def update_task(*args, **kwargs):
     except Exception as e:
         print(f"[tasks.py] update_task error: {e}")
         return False
+
+def mark_overdue_tasks(username):
+    """
+    Check all tasks for this user and mark any past-due, incomplete tasks as 'Overdue'.
+    """
+    try:
+        rows = get_tasks_full_rows(username)
+        if not rows:
+            return {"success": True, "marked": 0}
+        
+        today = datetime.now().date() if hasattr(datetime, 'now') else date.today()
+        marked_count = 0
+        
+        for row in rows:
+            # row format: (id, user_id, username, title, start_date, due_date, status, description, priority, category, estimated_minutes)
+            task_id = row[0]
+            due_date_str = row[5]  # due_date
+            status = row[6]
+            
+            # Skip if already completed or overdue
+            if status in ["Completed", "Overdue"]:
+                continue
+            
+            # Parse due date and check if past
+            if due_date_str:
+                try:
+                    due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+                    if due_date < today:
+                        # Mark as overdue
+                        db.update_task_status(task_id, "Overdue")
+                        marked_count += 1
+                except Exception:
+                    pass
+        
+        return {"success": True, "marked": marked_count}
+    except Exception as e:
+        print(f"[Error] mark_overdue_tasks: {e}")
+        return {"success": False, "error": str(e)}

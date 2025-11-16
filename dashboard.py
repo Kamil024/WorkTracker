@@ -218,6 +218,46 @@ def _apply_theme(theme_name):
         pass
 
 
+#  LOGOUT 
+def logout_action(root):
+    # Stop timer if running
+    if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):
+        try:
+            TIMER_STATE["root"].after_cancel(TIMER_STATE["after_id"])
+        except Exception:
+            pass
+        TIMER_STATE["after_id"] = None
+
+    TIMER_STATE["running"] = False
+    TIMER_STATE["seconds"] = 0
+    TIMER_STATE["base_seconds"] = 0
+    TIMER_STATE["start_time"] = None
+
+    # Confirm logout
+    confirm = Messagebox.okcancel("Are you sure you want to logout?", "Logout Confirmation")
+    if not confirm:
+        return
+
+    # Perform logout process
+    if auth.logout():
+        Messagebox.show_info("You have been logged out successfully.", "Logout")
+
+        # Clear dashboard UI
+        for widget in root.winfo_children():
+            widget.destroy()
+
+        # Reset window size and title for login
+        root.geometry("1000x600")
+        root.minsize(400, 400)
+        root.title("Work Tracker — Login")
+
+        # Reopen login window
+        import login
+        login.open_login_window(root)
+    else:
+        Messagebox.show_error("Logout failed. Please try again.", "Error")
+
+
 #  Dashboard 
 def open_dashboard(user, root):
     username = user["username"]
@@ -360,10 +400,42 @@ def _load_avatar_thumbnail(filename, size=(64, 64), greyscale=False):
 
 #  Add Task Modal (modern, compatible) 
 def open_add_task_modal(user_id, username, parent_frame):
-    modal = tk.Toplevel()
+    # Parent / root for proper centering and DPI queries
+    parent_root = parent_frame.winfo_toplevel() if parent_frame is not None else (TIMER_STATE.get("root") or tk._default_root)
+    modal = tk.Toplevel(parent_root)
     modal.title("Add New Task")
-    modal.geometry("420x520")
-    modal.resizable(False, False)
+    # Let modals be resizable and size them relative to the screen so they scale on HiDPI displays
+    try:
+        screen_w = parent_root.winfo_screenwidth()
+        screen_h = parent_root.winfo_screenheight()
+        w = max(420, int(screen_w * 0.36))
+        h = max(520, int(screen_h * 0.54))
+        modal.geometry(f"{w}x{h}")
+        modal.minsize(420, 480)
+        modal.resizable(True, True)
+    except Exception:
+        modal.geometry("420x520")
+        modal.resizable(True, True)
+    # Try to adjust tk scaling to match screen DPI (best-effort)
+    try:
+        dpi = modal.winfo_fpixels("1i")
+        modal.tk.call("tk", "scaling", max(1.0, dpi / 72.0))
+    except Exception:
+        pass
+    # Center modal
+    try:
+        modal.update_idletasks()
+        x = (parent_root.winfo_screenwidth() // 2) - (modal.winfo_width() // 2)
+        y = (parent_root.winfo_screenheight() // 2) - (modal.winfo_height() // 2)
+        modal.geometry(f"+{x}+{y}")
+    except Exception:
+        pass
+    # Make modal transient and modal to parent
+    try:
+        modal.transient(parent_root)
+        modal.grab_set()
+    except Exception:
+        pass
 
     # Header
     header_frame = ttk.Frame(modal, padding=(14, 8))
@@ -569,16 +641,47 @@ def open_edit_task_modal(user_id, username, parent_frame):
         for r in full_rows:
             try:
                 if r[3] == title_old:
-                    full_row = r
+                    full_row = r;
                     break
             except Exception:
                 continue
 
-    modal = tk.Toplevel()
+    parent_root = parent_frame.winfo_toplevel() if parent_frame is not None else (TIMER_STATE.get("root") or tk._default_root)
+    modal = tk.Toplevel(parent_root)
     modal.title("Edit Task")
-    modal.geometry("420x520")
-    modal.resizable(False, False)
+    # Size relative to screen for consistent scaling on HiDPI; keep sensible minimums
+    try:
+        screen_w = parent_root.winfo_screenwidth()
+        screen_h = parent_root.winfo_screenheight()
+        w = max(420, int(screen_w * 0.36))
+        h = max(520, int(screen_h * 0.54))
+        modal.geometry(f"{w}x{h}")
+        modal.minsize(420, 480)
+        modal.resizable(True, True)
+    except Exception:
+        modal.geometry("420x520")
+        modal.resizable(True, True)
+    # Adjust tk scaling to match DPI (best-effort)
+    try:
+        dpi = modal.winfo_fpixels("1i")
+        modal.tk.call("tk", "scaling", max(1.0, dpi / 72.0))
+    except Exception:
+        pass
+    # Center modal
+    try:
+        modal.update_idletasks()
+        x = (parent_root.winfo_screenwidth() // 2) - (modal.winfo_width() // 2)
+        y = (parent_root.winfo_screenheight() // 2) - (modal.winfo_height() // 2)
+        modal.geometry(f"+{x}+{y}")
+    except Exception:
+        pass
+    try:
+        modal.transient(parent_root)
+        modal.grab_set()
+    except Exception:
+        pass
 
+    # Header
     header_frame = ttk.Frame(modal, padding=(14, 8))
     header_frame.pack(fill="x")
     ttk.Label(header_frame, text="Edit Task", font=("Segoe UI Semibold", 14)).pack(anchor="w")
@@ -750,6 +853,13 @@ def open_edit_task_modal(user_id, username, parent_frame):
 #  Tasks Page 
 def show_tasks(user_id, username, frame):
     clear_frame(frame)
+    
+    # Auto-detect and mark overdue tasks
+    try:
+        tasks.mark_overdue_tasks(username)
+    except Exception:
+        pass
+    
     ttk.Label(frame, text="Tasks", font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(0, 12))
 
     btn_frame = ttk.Frame(frame)
@@ -758,6 +868,9 @@ def show_tasks(user_id, username, frame):
                command=lambda: open_add_task_modal(user_id, username, frame)).pack(side="right", padx=(4, 0))
     ttk.Button(btn_frame, text="✏️ Edit Task",
                command=lambda: open_edit_task_modal(user_id, username, frame)).pack(side="right", padx=(0, 4))
+    ttk.Button(btn_frame, text="✅ Mark as Done",
+               command=lambda: mark_task_done(user_id, username, frame),
+               bootstyle="success-outline").pack(side="right", padx=(0, 4))
     ttk.Button(btn_frame, text="🗑️ Delete Task",
                command=lambda: delete_task_action(user_id, username, frame),
                bootstyle="danger-outline").pack(side="right", padx=(0, 4))
@@ -976,6 +1089,126 @@ def show_admin_panel(user_id, username, frame):
 
     ttk.Button(user_task_frame, text="🔄 Refresh", command=refresh_admin_tasks).pack(side="left", padx=(0, 12))
 
+    # Edit button for admin
+    def admin_edit_task():
+        selected_user = task_user_var.get()
+        if not selected_user:
+            Messagebox.show_error("Please select a user first.")
+            return
+
+        table = getattr(task_display_frame, "table", None)
+        if not table:
+            Messagebox.show_error("No tasks loaded. Click Refresh first.")
+            return
+
+        selected = table.view.selection()
+        if not selected:
+            Messagebox.show_error("Please select a task to edit.")
+            return
+
+        selected_item = table.view.item(selected[0])["values"]
+        if not selected_item:
+            Messagebox.show_error("Invalid task data.")
+            return
+
+        # Support both formats
+        if len(selected_item) >= 6:
+            title_old = selected_item[0]
+            start_date = selected_item[3]
+        elif len(selected_item) >= 4:
+            title_old = selected_item[0]
+            start_date = selected_item[1]
+        else:
+            Messagebox.show_error("Invalid task data format.")
+            return
+
+        # Get user ID
+        uid = next((u[0] for u in users if u[1] == selected_user), None)
+        if uid is None:
+            Messagebox.show_error("User not found.")
+            return
+
+        # Open edit modal (reuse the existing modal, but with admin context)
+        parent_root = task_tab.winfo_toplevel()
+        modal = tk.Toplevel(parent_root)
+        modal.title("Edit Task (Admin)")
+        try:
+            screen_w = parent_root.winfo_screenwidth()
+            screen_h = parent_root.winfo_screenheight()
+            w = max(420, int(screen_w * 0.36))
+            h = max(520, int(screen_h * 0.54))
+            modal.geometry(f"{w}x{h}")
+            modal.minsize(420, 480)
+            modal.resizable(True, True)
+        except Exception:
+            modal.geometry("420x520")
+            modal.resizable(True, True)
+
+        # Header
+        header_frame = ttk.Frame(modal, padding=(14, 8))
+        header_frame.pack(fill="x")
+        ttk.Label(header_frame, text=f"Edit Task for {selected_user}", font=("Segoe UI Semibold", 14)).pack(anchor="w")
+
+        form = ttk.Frame(modal, padding=(14, 8))
+        form.pack(fill="both", expand=True)
+
+        # Title
+        ttk.Label(form, text="Title").grid(row=0, column=0, sticky="w", pady=(6, 2))
+        title_entry = ttk.Entry(form)
+        title_entry.insert(0, title_old)
+        title_entry.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        form.columnconfigure(0, weight=1)
+
+        # Due Date
+        ttk.Label(form, text="Due Date").grid(row=2, column=0, sticky="w", pady=(6, 2))
+        deadline_picker = DateEntry(form, dateformat="%Y-%m-%d", startdate=datetime.now(), width=20)
+        deadline_picker.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+
+        # Status (important for setting to Overdue)
+        ttk.Label(form, text="Status").grid(row=4, column=0, sticky="w", pady=(6, 2))
+        status_combo = ttk.Combobox(form, values=["In Progress", "Completed", "Overdue"], state="readonly")
+        status_combo.set("In Progress")
+        status_combo.grid(row=5, column=0, sticky="ew", pady=(0, 8))
+
+        # Buttons
+        btn_frame = ttk.Frame(modal, padding=(14, 8))
+        btn_frame.pack(fill="x")
+        btn_frame.columnconfigure(0, weight=1)
+        btn_frame.columnconfigure(1, weight=1)
+
+        def save_admin_changes():
+            new_title = title_entry.get().strip()
+            new_due = deadline_picker.entry.get()
+            new_status = status_combo.get()
+
+            if not new_title:
+                Messagebox.show_error("Please enter a task title.")
+                return
+
+            # Call update_task with admin context
+            try:
+                success = tasks.update_task(
+                    uid,
+                    selected_user,
+                    title_old,
+                    new_title,
+                    start_date,
+                    new_due,
+                    new_status
+                )
+            except Exception:
+                success = False
+
+            if success:
+                Messagebox.show_info("Task updated successfully!")
+                modal.destroy()
+                refresh_admin_tasks()
+            else:
+                Messagebox.show_error("Failed to update task.")
+
+        ttk.Button(btn_frame, text="💾 Save Changes", command=save_admin_changes, bootstyle="primary").grid(row=0, column=1, sticky="ew")
+        ttk.Button(btn_frame, text="Cancel", command=lambda: modal.destroy(), bootstyle="secondary-outline").grid(row=0, column=0, sticky="ew", padx=(0, 6))
+
     # Delete button for admin
     def admin_delete_task():
         selected_user = task_user_var.get()
@@ -1126,9 +1359,10 @@ def _equip_avatar(user_id, avatar_filename, parent_frame=None):
     if ok:
         Messagebox.show_info(f"Equipped {avatar_filename}")
         if parent_frame:
+            # Refresh the settings page to show updated avatar
             try:
-                for w in parent_frame.winfo_children():
-                    w.destroy()
+                username = db.get_username(user_id) if hasattr(db, "get_username") else ""
+                show_settings(user_id, username, parent_frame)
             except Exception:
                 pass
     else:
@@ -1237,6 +1471,13 @@ def show_settings(user_id, username, frame):
 #  Analytics 
 def show_analytic(username, frame):
     clear_frame(frame)
+    
+    # Auto-detect and mark overdue tasks
+    try:
+        tasks.mark_overdue_tasks(username)
+    except Exception:
+        pass
+    
     ttk.Label(frame, text="Analytics", font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(0, 10))
     ttk.Label(frame, text=f"Comprehensive productivity insights for {username}.",
               font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", pady=(0, 15))
@@ -1368,55 +1609,6 @@ def reset_timer():
     refresh_timer_label()
 
 
-#  Overview x   
-
-# def show_welcome(user_id, username, frame):
-#     clear_frame(frame)
-    
-#     # Create top section with welcome text and calendar
-#     top_frame = ttk.Frame(frame)
-#     top_frame.pack(fill="x", pady=(0, 15))
-    
-#     # Welcome text on left
-#     text_frame = ttk.Frame(top_frame)
-#     text_frame.pack(side="left", fill="both", expand=True)
-#     ttk.Label(text_frame, text=f"Welcome back, {username}!", font=("Segoe UI", 20, "bold")).pack(anchor="w")
-#     ttk.Label(text_frame, text="Your productivity overview for today.", font=("Segoe UI", 10),
-#               foreground="#6c757d").pack(anchor="w", pady=(4, 0))
-              
-#     # Calendar on right
-#     cal_frame = ttk.Frame(top_frame)
-#     cal_frame.pack(side="right", padx=(20, 0))
-#     calendar = DateEntry(cal_frame, firstweekday=0, dateformat="%Y-%m-%d", width=20, 
-#                         bootstyle="primary")
-#     calendar.pack(padx=5, pady=5)
-
-#     # Stats section
-#     tasks_rows = tasks.get_tasks_rows(username)
-#     completed = in_progress = overdue = 0
-
-#     if tasks_rows:
-#         for t in tasks_rows:
-#             status = str(t[3]).strip().lower() if len(t) > 3 else ""
-#             if status == "completed":
-#                 completed += 1
-#             elif status == "in progress":
-#                 in_progress += 1
-#             elif status == "overdue":
-#                 overdue += 1
-
-#     focus_time = completed * 60
-
-#     stats_frame = ttk.Frame(frame)
-#     stats_frame.pack(fill="x", pady=(18, 12))
-#     card(stats_frame, "Completed", completed, icon="✅")
-#     card(stats_frame, "In Progress", in_progress, icon="🔁")
-#     card(stats_frame, "Overdue", overdue, icon="⚠️")
-#     card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱")
-import tkinter as tk
-from tkinter import ttk
-# If using ttkbootstrap, you would replace these imports with:
-# from ttkbootstrap import Style, DateEntry 
 
 # --- CORE FUNCTIONS ---
 
@@ -1468,7 +1660,6 @@ def show_welcome(user_id, username, frame):
     # Calendar on right
     cal_frame = ttk.Frame(top_frame)
     cal_frame.pack(side="right", padx=(20, 0))
-    # Note: DateEntry is assumed to be defined/imported correctly (e.g., from ttkbootstrap)
     calendar = DateEntry(cal_frame, firstweekday=0, dateformat="%Y-%m-%d", width=20, 
                         bootstyle="primary")
     calendar.pack(padx=5, pady=5)
@@ -1504,88 +1695,173 @@ def show_welcome(user_id, username, frame):
     card(stats_frame, "Overdue", overdue, icon="⚠️", style="danger")       
     card(stats_frame, "Focus Time", f"{focus_time}m", icon="⏱", style="primary")
 
+    # --- Middle Section: Quick Actions ---
+    ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=12)
+    
+    quick_frame = ttk.Frame(frame)
+    quick_frame.pack(fill="x", pady=(0, 12))
+    ttk.Label(quick_frame, text="⚡ Quick Actions", font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(0, 8))
+    
+    btn_row = ttk.Frame(quick_frame)
+    btn_row.pack(fill="x")
+    ttk.Button(
+        btn_row, text="➕ New Task", bootstyle="primary",
+        command=lambda: open_add_task_modal(user_id, username, frame)
+    ).pack(side="left", padx=(0, 8))
+    ttk.Button(
+        btn_row, text="📊 View Analytics", bootstyle="info",
+        command=lambda: show_analytic(username, frame)
+    ).pack(side="left", padx=(0, 8))
+    ttk.Button(
+        btn_row, text="🏆 Check Rewards", bootstyle="success",
+        command=lambda: show_rewards(user_id, username, frame)
+    ).pack(side="left", padx=(0, 8))
+    ttk.Button(
+        btn_row, text="⚙️ Settings", bootstyle="secondary",
+        command=lambda: show_settings(user_id, username, frame)
+    ).pack(side="left")
 
-# --- RUNNABLE EXAMPLE BLOCK (The 'Fix') ---
-
-if __name__ == '__main__':
-    # --- MOCK/PLACEHOLDER DEFINITIONS FOR RUNNING ---
-    class MockTasks:
-        def get_tasks_rows(self, username):
-            return [
-                (1, 1, "Design UI", "Completed", "2025-11-16"),
-                (2, 1, "Code Backend", "In Progress", "2025-11-17"),
-                (3, 1, "Write Docs", "Overdue", "2025-11-10"),
-                (4, 1, "Test Feature A", "Completed", "2025-11-16"),
-                (5, 1, "Debug Login", "In Progress", "2025-11-18"),
-            ]
-    tasks = MockTasks()
-
-    class DateEntry(ttk.Frame):
-        def __init__(self, master=None, bootstyle="primary", **kw):
-            super().__init__(master, **kw)
-            ttk.Label(self, text="[Date Picker Placeholder]").pack(padx=5, pady=5)
-            
-    # Attempt to import ttkbootstrap for styling. If it fails, use standard tkinter.
+    # --- Bottom Section: Two-Column Layout ---
+    ttk.Separator(frame, orient="horizontal").pack(fill="x", pady=12)
+    
+    content_frame = ttk.Frame(frame)
+    content_frame.pack(fill="both", expand=True, pady=(0, 10))
+    content_frame.columnconfigure(0, weight=1)
+    content_frame.columnconfigure(1, weight=1)
+    content_frame.rowconfigure(0, weight=1)
+    
+    # Left: Today's Tasks
+    left_col = ttk.Frame(content_frame)
+    left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+    left_col.columnconfigure(0, weight=1)
+    left_col.rowconfigure(1, weight=1)
+    
+    ttk.Label(left_col, text="📋 Today's Tasks", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 8))
+    
+    tasks_display = ttk.Frame(left_col, relief="flat")
+    tasks_display.grid(row=1, column=0, sticky="nsew")
+    tasks_display.columnconfigure(0, weight=1)
+    
+    if tasks_rows:
+        # Show first 5 in-progress tasks
+        in_progress_tasks = [t for t in tasks_rows if len(t) > 3 and str(t[3]).strip().lower() == "in progress"][:5]
+        if in_progress_tasks:
+            for idx, task in enumerate(in_progress_tasks):
+                task_title = task[0] if len(task) > 0 else "Untitled"
+                task_item = ttk.Frame(tasks_display, padding=8, relief="solid", borderwidth=1)
+                task_item.grid(row=idx, column=0, sticky="ew", pady=4)
+                ttk.Label(task_item, text=f"• {task_title}", font=("Segoe UI", 10)).pack(anchor="w")
+        else:
+            ttk.Label(tasks_display, text="No tasks in progress. Great job! 🎉", 
+                      font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", pady=20)
+    else:
+        ttk.Label(tasks_display, text="No tasks yet. Create one to get started! 🚀", 
+                  font=("Segoe UI", 10), foreground="#6c757d").pack(anchor="w", pady=20)
+    
+    # Right: Motivation & Level Info
+    right_col = ttk.Frame(content_frame)
+    right_col.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+    right_col.columnconfigure(0, weight=1)
+    right_col.rowconfigure(1, weight=1)
+    
+    ttk.Label(right_col, text="🎮 Level & Progress", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 8))
+    
+    reward_display = ttk.Frame(right_col, relief="flat")
+    reward_display.grid(row=1, column=0, sticky="nsew")
+    reward_display.columnconfigure(0, weight=1)
+    
     try:
-        from ttkbootstrap import Style
-        root = Style("flatly").master # Apply a modern theme
-        print("Using ttkbootstrap theme.")
-    except ImportError:
-        root = tk.Tk()
-        # Fallback to standard ttk style setup if ttkbootstrap isn't installed
-        style = ttk.Style()
-        style.configure("success.TFrame", background="#d4edda", foreground="#155724")
-        style.configure("info.TFrame", background="#d1ecf1", foreground="#0c5460")
-        style.configure("danger.TFrame", background="#f8d7da", foreground="#721c24")
-        style.configure("primary.TFrame", background="#cce5ff", foreground="#004085")
-        print("ttkbootstrap not found. Using standard ttk with custom styles.")
+        reward = db.get_reward_data(user_id)
+        level = reward.get("level", 1)
+        exp = reward.get("exp", 0)
+
+        exp_to_next = 100 - (exp % 100)
         
-    root.title("Productivity Dashboard")
-    
-    main_frame = ttk.Frame(root, padding=20)
-    main_frame.pack(fill="both", expand=True)
-    
-    # Run the welcome function
-    show_welcome(user_id=1, username="Alice", frame=main_frame)
-    
-    root.mainloop()
+        # Level card
+        level_card = ttk.Frame(reward_display, padding=12, relief="solid", borderwidth=1)
+        level_card.pack(fill="x", pady=(0, 8))
+        
+        ttk.Label(level_card, text=f"Level {level}", font=("Segoe UI", 18, "bold"), 
+                  foreground="#4B6EF5").pack()
+        ttk.Label(level_card, text=f"{exp} EXP • {exp_to_next} to next level", 
+                  font=("Segoe UI", 9), foreground="#6c757d").pack()
+        
+        # Progress bar
+        progress_val = (exp % 100) / 100 * 100
+        ttk.Progressbar(level_card, value=progress_val, maximum=100, bootstyle="success").pack(fill="x", pady=(8, 0))
+        
+        # Motivational message
+        motivation_msgs = [
+            "💪 Keep up the great work!",
+            "🔥 You're on fire today!",
+            "⭐ Every task completed brings you closer to the next level!",
+            "🎯 Focus on what matters most.",
+            "✨ Consistency is key to success!",
+            "🚀 You've got this!",
+        ]
+        import random
+        msg = random.choice(motivation_msgs)
+        
+        motivate = ttk.Frame(reward_display, padding=12, relief="solid", borderwidth=1)
+        motivate.pack(fill="x", pady=(0, 0))
+        ttk.Label(motivate, text=msg, font=("Segoe UI", 10, "italic"), 
+                  foreground="#495057", wraplength=200, justify="center").pack()
+    except Exception as e:
+        ttk.Label(reward_display, text="Unable to load level info.", foreground="#6c757d").pack()
 
 
-#  Logout 
-def logout_action(root):
-    # Stop timer if running
-    if TIMER_STATE.get("after_id") and TIMER_STATE.get("root"):
-        try:
-            TIMER_STATE["root"].after_cancel(TIMER_STATE["after_id"])
-        except Exception:
-            pass
-        TIMER_STATE["after_id"] = None
-
-    TIMER_STATE["running"] = False
-    TIMER_STATE["seconds"] = 0
-    TIMER_STATE["base_seconds"] = 0
-    TIMER_STATE["start_time"] = None
-
-    # Confirm logout
-    confirm = Messagebox.okcancel("Are you sure you want to logout?", "Logout Confirmation")
-    if not confirm:
+#  Mark Task as Done 
+def mark_task_done(user_id, username, parent_frame):
+    """Mark selected task as Completed and award EXP."""
+    table = getattr(parent_frame, "table", None)
+    if not table:
+        Messagebox.show_error("No table found.")
         return
 
-    # Perform logout process
-    if auth.logout():
-        Messagebox.show_info("You have been logged out successfully.", "Logout")
+    selected = table.view.selection()
+    if not selected:
+        Messagebox.show_error("Please select a task to mark as done.")
+        return
 
-        # Clear dashboard UI
-        for widget in root.winfo_children():
-            widget.destroy()
+    selected_item = table.view.item(selected[0])["values"]
+    if not selected_item:
+        Messagebox.show_error("Invalid task data.")
+        return
 
-        # Reset window size and title for login
-        root.geometry("1000x600")
-        root.minsize(400, 400)
-        root.title("Work Tracker — Login")
-
-        # Reopen login window
-        import login
-        login.open_login_window(root)
+    # Support both old 4-column rows and new 6-column rows
+    if len(selected_item) >= 6:
+        title = selected_item[0]
+        start_date = selected_item[3]
+    elif len(selected_item) >= 4:
+        title = selected_item[0]
+        start_date = selected_item[1]
     else:
-        Messagebox.show_error("Logout failed. Please try again.", "Error")
+        Messagebox.show_error("Invalid task data format.")
+        return
+
+    # Update task to Completed
+    try:
+        success = tasks.update_task(
+            user_id,
+            username,
+            title,
+            title,
+            start_date,
+            "",
+            "Completed"
+        )
+    except Exception:
+        success = False
+
+    if success:
+        # Award EXP for completion
+        res = db.add_exp(user_id, 10)
+        if res.get("success"):
+            if res.get("leveled_up"):
+                Messagebox.show_info(f"🎉 Task completed! +10 EXP — Level up! Now Level {res.get('level')}")
+            else:
+                Messagebox.show_info("✅ Task completed! +10 EXP")
+        
+        show_tasks(user_id, username, parent_frame)
+    else:
+        Messagebox.show_error("Failed to mark task as done.")
